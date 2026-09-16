@@ -3,7 +3,7 @@ import { useLog, setState, patch } from "./store";
 import { exportObject, applyImport, extractJSON, summaryText, sortedSessions, claudePrompt } from "./model";
 import { copyText, toast } from "./ui";
 
-function fileName() { return `gym-log-${new Date().toISOString().slice(0, 10)}.json`; }
+function fileName() { return `gymmy-${new Date().toISOString().slice(0, 10)}.json`; }
 
 export default function Backup() {
   const S = useLog();
@@ -22,7 +22,7 @@ export default function Backup() {
     try {
       const file = new File([json], name, { type: "application/json" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Gym Log backup" });
+        await navigator.share({ files: [file], title: "Gymmy backup" });
         markBackedUp(); toast("Backup shared"); return;
       }
     } catch (e) { if (e.name === "AbortError") return; }

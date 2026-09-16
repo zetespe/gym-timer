@@ -236,7 +236,7 @@ export function extractJSON(text) {
 
 export function claudePrompt(state) {
   const ex = allExercises(state).map((x) => `${x.id} (${x.name}, ${x.mode}${x.perSide ? ", per side" : ""}${x.bodyweight ? ", bodyweight" : ""})`).join("; ");
-  return `I log gym sessions in a small offline app. I'll describe a session in words; reply with ONE JSON block I can paste into the app, then a one-line summary. Format:
+  return `I log gym sessions in a small offline app called Gymmy. I'll describe a session in words; reply with ONE JSON block I can paste into the app, then a one-line summary. Format:
 {"type":"gym-import","sessions":[{"id":"YYYY-MM-DD-x","date":"YYYY-MM-DD","workoutId":"<id or free>","name":"Workout name","notes":"","exercises":[{"exId":"goblet_squat","name":"Goblet Squat","mode":"reps","sets":[{"w":16,"r":8},{"w":16,"r":8}],"notes":""}]}]}
 Set fields: w = weight ${state.settings.unit} (omit for bodyweight), r = reps, s = seconds (mode "time"), m = metres (mode "dist"). One object per set.
 To change the plan instead, reply with {"type":"gym-import","plan":{"name":"...","workouts":[{"id":"a","name":"Workout A","exercises":[{"id":"goblet_squat","name":"Goblet Squat","mode":"reps","sets":3,"repsMin":8,"repsMax":10,"weight":16,"increment":1,"rest":90,"perSide":false,"bodyweight":false,"cue":""}]}]}}

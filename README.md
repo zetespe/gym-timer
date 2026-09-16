@@ -1,6 +1,6 @@
-# Gym Timer + Log
+# Gymmy
 
-A gym PWA that works fully offline after first load:
+Gymmy is a gym PWA (repo `gym-timer`) that works fully offline after first load:
 
 - **Log** — your training plan and every session, stored only on the phone.
   Sets are prefilled from last time so a repeat is one tap; a quick-log box

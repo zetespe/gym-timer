@@ -14,7 +14,7 @@ export default function Today({ go, justFinished }) {
   if (!S.plan.workouts.length && !S.sessions.length) {
     return (
       <div className="page">
-        <h1>Gym Log</h1>
+        <h1>Gymmy</h1>
         <p className="muted">Everything you record stays on this phone. Nothing is uploaded anywhere.</p>
         <h2>Start with a plan</h2>
         <button className="big primary" onClick={() => go("plan", { edit: "new" })}><strong>Build a plan</strong><span>Add workouts and exercises by hand.</span></button>
@@ -27,7 +27,7 @@ export default function Today({ go, justFinished }) {
 
   return (
     <div className="page">
-      <h1>Gym Log</h1>
+      <h1>Gymmy</h1>
       {S.plan.name && <p className="muted small">{S.plan.name}</p>}
       {finished && (
         <div className="card">

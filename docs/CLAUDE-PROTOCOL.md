@@ -1,6 +1,6 @@
-# Gym Log ↔ Claude protocol
+# Gymmy ↔ Claude protocol
 
-The log stores everything on the phone. Claude never has direct access. Data
+Gymmy stores everything on the phone. Claude never has direct access. Data
 moves by copy/paste (Backup tab) in either direction.
 
 ## From the app to Claude

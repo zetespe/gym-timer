@@ -14,9 +14,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
       },
       manifest: {
-        name: 'Gym Timer',
-        short_name: 'Gym Timer',
-        description: 'Rep timer with voice cues and beeps',
+        name: 'Gymmy',
+        short_name: 'Gymmy',
+        description: 'Offline workout log and rep timer. Your data stays on your phone.',
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#000000',
