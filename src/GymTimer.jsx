@@ -1,50 +1,20 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { beep, doubleBeep, tripleBeep, speak } from "./audio";
+import { getState, patch } from "./log/store";
 
 const PHASE_IDLE = "idle";
 const PHASE_HOLD = "hold";
 const PHASE_SWAP = "swap";
 const PHASE_COUNTDOWN = "countdown";
 
-function beep(freq = 880, duration = 150, vol = 0.5) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = freq;
-    gain.gain.value = vol;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
-    osc.stop(ctx.currentTime + duration / 1000 + 0.05);
-  } catch (e) {}
-}
-
-function doubleBeep() {
-  beep(1100, 120, 0.6);
-  setTimeout(() => beep(1100, 120, 0.6), 180);
-}
-
-function tripleBeep() {
-  beep(1320, 100, 0.7);
-  setTimeout(() => beep(1320, 100, 0.7), 150);
-  setTimeout(() => beep(1320, 100, 0.7), 300);
-}
-
-function speak(text) {
-  try {
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.1;
-    u.pitch = 0.9;
-    u.volume = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  } catch (e) {}
-}
-
-export default function GymTimer() {
-  const [holdTime, setHoldTime] = useState(20);
-  const [swapTime, setSwapTime] = useState(4);
+// `preset` overrides the saved hold/swap times (used when opened from a timed
+// exercise); `onResult({ reps, hold })` is called on STOP when provided.
+export default function GymTimer({ preset, onResult } = {}) {
+  const saved = getState().settings.timer || { hold: 20, swap: 4 };
+  const [holdTime, setHoldTimeRaw] = useState(preset?.hold ?? saved.hold);
+  const [swapTime, setSwapTimeRaw] = useState(preset?.swap ?? saved.swap);
+  const setHoldTime = (v) => { setHoldTimeRaw(v); if (!preset) patch((st) => { st.settings.timer.hold = v; }); };
+  const setSwapTime = (v) => { setSwapTimeRaw(v); if (!preset) patch((st) => { st.settings.timer.swap = v; }); };
   const [phase, setPhase] = useState(PHASE_IDLE);
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -161,11 +131,13 @@ export default function GymTimer() {
 
   const handleStop = useCallback(() => {
     cleanup();
+    const completed = phaseRef.current === PHASE_HOLD ? Math.max(0, repRef.current - 1) : repRef.current;
     phaseRef.current = PHASE_IDLE;
     setPhase(PHASE_IDLE);
     speak("Done!");
     doubleBeep();
-  }, [cleanup]);
+    if (onResult) onResult({ reps: completed, hold: holdTime });
+  }, [cleanup, onResult, holdTime]);
 
   const handleTestSound = useCallback(() => {
     beep(880, 150, 0.5);
