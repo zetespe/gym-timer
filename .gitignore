@@ -28,3 +28,8 @@ src/App.css
 src/assets/
 public/favicon.svg
 public/icons.svg
+
+# Personal data: backups and paste blocks must never be committed (the repo is public)
+gymmy-*.json
+*-plan-and-history.json
+*backup*.json
