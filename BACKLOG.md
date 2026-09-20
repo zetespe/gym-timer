@@ -120,7 +120,7 @@ awake; Media Session metadata leaking into the lock screen. The complete fix
 remains a native wrapper (Capacitor) with local notifications — a much bigger
 project.
 
-## 5. App icons are placeholders
+## 6. App icons are placeholders
 
 **What we found:** the home-screen and browser icons are generated stopwatch
 placeholders (from `icon.svg`), kept from the original Gym Timer.
