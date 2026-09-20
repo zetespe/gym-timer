@@ -57,7 +57,33 @@ heuristic used for full exercise lines in `parsePlanText`.
 gives sensible defaults — push-ups won't show a pointless 0 kg weight field
 in every session.
 
-## 4. Experiment: rest-timer sound while the app is in the background
+## 4. Feature: switch between plans (requested 2026-09-20)
+
+**What Zofia wants (plain English):** the app holds one plan at a time. She
+wants several plans for different circumstances — e.g. the full gym plan, a
+travel plan, a home-only plan (exercises doable without equipment) — and a
+way to *switch* between them, not just pile more workouts into one plan.
+A longer plan variant for different circumstances is a different thing than
+another workout in the same plan. Hard requirement: **it has to be simple** —
+and what "simple" means here is deliberately still open. Design before
+building: maybe just a named-plans list with one active, maybe something
+leaner. Discuss the design with her first.
+
+**What needs to be done (tech notes):** state grows from `plan` to
+`plans: []` + `activePlanId` (migration keeps the current plan as the only
+entry). Exercise history already links by exercise id, so shared exercises
+(push-ups at home and at the gym) keep one history and next-weight thread
+across plans if ids match — a real argument for a shared exercise id space.
+Today tab shows the active plan's workouts; Plan tab gets the switcher.
+AI import needs a decision: does `plan` replace the active plan only, and
+how does an AI address a specific plan?
+
+**Expected user experience:** before a trip, one tap switches to "Travel";
+Today shows only the travel workouts; back home, switch back. History and
+progression survive switching, and shared exercises carry their numbers
+between plans.
+
+## 5. Experiment: rest-timer sound while the app is in the background
 
 **The problem (plain English):** when the rest countdown hits zero while
 you're in another app (Spotify, messages) or the screen is locked, no beep or
