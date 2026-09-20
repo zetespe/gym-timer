@@ -25,9 +25,12 @@ export default function Session({ onFinished, onExit }) {
     if (!rest) return;
     if (rest.left <= 0) {
       // Announce "Go" once, even if we resumed long after the rest ended.
-      if (restPrev.current !== 0) { doubleBeep(); speak("Go"); }
+      // iOS freezes the app in the background, so the announcement can only
+      // happen on return — say HOW LATE it is, so overlong rests are visible.
+      const over = Math.max(0, Math.round((Date.now() - rest.endAt) / 1000));
+      if (restPrev.current !== 0) { doubleBeep(); speak(over > 5 ? `Go! Rest ended ${over} seconds ago` : "Go"); }
       restPrev.current = 0;
-      const t = setTimeout(() => setRest(null), 1500);
+      const t = setTimeout(() => setRest(null), over > 5 ? 4000 : 1500);
       return () => clearTimeout(t);
     }
     // Side effects stay outside the setRest updater — React may invoke
@@ -150,13 +153,16 @@ export default function Session({ onFinished, onExit }) {
         <button className="btn ghost danger" onClick={() => { if (confirm("Discard this session? Nothing will be saved.")) { setState((s) => ({ ...s, draft: null })); onExit(); } }}>Discard</button>
       </div>
 
-      {rest && (
-        <div className="rest" onClick={() => setRest(null)}>
-          <div className="t">{rest.left}</div>
-          <div className="grow"><div className="small muted">Rest · {rest.name}</div><div className="bar"><div style={{ width: `${(100 * rest.left) / rest.total}%` }} /></div></div>
-          <button className="btn sm ghost">Skip</button>
-        </div>
-      )}
+      {rest && (() => {
+        const over = rest.left <= 0 ? Math.max(0, Math.round((Date.now() - rest.endAt) / 1000)) : 0;
+        return (
+          <div className={"rest" + (over > 5 ? " late" : "")} onClick={() => setRest(null)}>
+            <div className="t">{rest.left > 0 ? rest.left : "GO"}</div>
+            <div className="grow"><div className="small muted">{over > 5 ? `Rest ended ${over} s ago` : `Rest · ${rest.name}`}</div><div className="bar"><div style={{ width: `${Math.max(0, (100 * rest.left) / rest.total)}%` }} /></div></div>
+            <button className="btn sm ghost">Skip</button>
+          </div>
+        );
+      })()}
 
       {timerFor != null && d.exercises[timerFor] && (
         <div className="overlay">

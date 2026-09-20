@@ -57,7 +57,44 @@ heuristic used for full exercise lines in `parsePlanText`.
 gives sensible defaults — push-ups won't show a pointless 0 kg weight field
 in every session.
 
-## 4. App icons are placeholders
+## 4. Experiment: rest-timer sound while the app is in the background
+
+**The problem (plain English):** when the rest countdown hits zero while
+you're in another app (Spotify, messages) or the screen is locked, no beep or
+"Go" plays — iPhone freezes web apps completely in the background, so nothing
+can make sound. The app already shows the *correct* remaining time the moment
+you come back, and now also announces "Go! Rest ended N seconds ago" (in red)
+so overlong rests are at least visible — but it cannot warn you *at* zero.
+A proper App-Store app could; a web app on iOS cannot schedule sounds or
+notifications.
+
+**The experiment:** the trick interval-timer web apps use is to play a
+*silent* audio track during the rest. iOS then treats the app like a music
+player and keeps it running in the background, so the real beep and "Go" fire
+on time even from another app. The catch: starting audio in Gymmy will likely
+pause or interrupt Spotify — which may defeat the point at the gym. So this
+would ship as an **off-by-default setting** ("Background beeps —
+experimental, may interfere with music apps") and needs a real-phone test
+with headphones + Spotify before judging it.
+
+**Expected user experience if it works:** flip the toggle once; from then on
+the "Go" cue sounds at the right moment even with the phone locked or in
+Spotify. If it fights with music playback, the toggle stays off and nothing
+changes.
+
+**Tech notes (implementation):** loop a near-silent `<audio>` element
+(`loop`, `playsinline`, tiny silent WAV as a data URI) started from the
+set-tick tap (user gesture, required by iOS autoplay rules) and stopped when
+the rest ends; keep the `AudioContext` resumed off the same gesture so
+`beep()`/`speechSynthesis` can fire from the still-running JS timer. Risks:
+iOS may still suspend despite audio; the audio session may take over or duck
+other apps' playback (test `audio.volume = 0.001` vs true silence — fully
+silent tracks are sometimes ignored for keep-alive); battery cost of staying
+awake; Media Session metadata leaking into the lock screen. The complete fix
+remains a native wrapper (Capacitor) with local notifications — a much bigger
+project.
+
+## 5. App icons are placeholders
 
 **What we found:** the home-screen and browser icons are generated stopwatch
 placeholders (from `icon.svg`), kept from the original Gym Timer.
