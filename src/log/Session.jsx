@@ -3,6 +3,7 @@ import { useLog, patch, setState, getState, slug } from "./store";
 import { fmtDate, fmtEntry, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, findExercise } from "./model";
 import { Stepper, toast } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
+import { useWakeLock } from "../useWakeLock";
 import GymTimer from "../GymTimer";
 
 export default function Session({ onFinished, onExit }) {
@@ -11,19 +12,11 @@ export default function Session({ onFinished, onExit }) {
   const [rest, setRest] = useState(null); // { total, endAt, left, name }
   const [timerFor, setTimerFor] = useState(null); // exercise index
   const [now, setNow] = useState(() => Date.now());
-  const wakeRef = useRef(null);
   const restPrev = useRef(null); // previous `left`, to fire each cue beep once
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
   // keep the screen on for the whole session where supported
-  useEffect(() => {
-    let active = true;
-    const req = async () => { try { if (navigator.wakeLock && document.visibilityState === "visible") wakeRef.current = await navigator.wakeLock.request("screen"); } catch (e) {} };
-    req();
-    const vis = () => { if (active && document.visibilityState === "visible") req(); };
-    document.addEventListener("visibilitychange", vis);
-    return () => { active = false; document.removeEventListener("visibilitychange", vis); try { if (wakeRef.current) wakeRef.current.release(); } catch (e) {} };
-  }, []);
+  useWakeLock(true);
   // Rest countdown. `left` is always derived from the wall clock (endAt), not
   // from tick counting: browsers throttle or suspend timers when the app is
   // backgrounded, so on return the remaining time must still be correct.

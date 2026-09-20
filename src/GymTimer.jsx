@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { beep, doubleBeep, tripleBeep, speak } from "./audio";
+import { useWakeLock, wakeLockSupported } from "./useWakeLock";
 import { getState, patch } from "./log/store";
 
 const PHASE_IDLE = "idle";
@@ -19,54 +20,21 @@ export default function GymTimer({ preset, onResult } = {}) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
   const [totalReps, setTotalReps] = useState(0);
-  const [wakeLockActive, setWakeLockActive] = useState(false);
   const [dimmed, setDimmed] = useState(false);
   const intervalRef = useRef(null);
   const phaseRef = useRef(PHASE_IDLE);
   const timeRef = useRef(0);
   const repRef = useRef(0);
-  const wakeLockRef = useRef(null);
 
-  const wakeLockSupported = typeof navigator !== "undefined" && "wakeLock" in navigator;
-
-  const requestWakeLock = useCallback(async () => {
-    if (!wakeLockSupported) return;
-    try {
-      wakeLockRef.current = await navigator.wakeLock.request("screen");
-      setWakeLockActive(true);
-      wakeLockRef.current.addEventListener("release", () => setWakeLockActive(false));
-    } catch (e) {
-      setWakeLockActive(false);
-    }
-  }, [wakeLockSupported]);
-
-  const releaseWakeLock = useCallback(async () => {
-    if (wakeLockRef.current) {
-      try { await wakeLockRef.current.release(); } catch (e) {}
-      wakeLockRef.current = null;
-      setWakeLockActive(false);
-    }
-  }, []);
-
-  // Re-acquire wake lock when tab becomes visible again (browser releases it on tab switch)
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && phaseRef.current !== PHASE_IDLE) {
-        requestWakeLock();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [requestWakeLock]);
+  const wakeLockActive = useWakeLock(phase !== PHASE_IDLE);
 
   const cleanup = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    releaseWakeLock();
     setDimmed(false);
-  }, [releaseWakeLock]);
+  }, []);
 
   useEffect(() => () => cleanup(), [cleanup]);
 
@@ -116,7 +84,6 @@ export default function GymTimer({ preset, onResult } = {}) {
 
   const handleStart = useCallback(() => {
     cleanup();
-    requestWakeLock();
     repRef.current = 0;
     setRep(0);
     setTotalReps(0);
@@ -127,7 +94,7 @@ export default function GymTimer({ preset, onResult } = {}) {
     speak("Get ready!");
     beep(440, 100, 0.3);
     intervalRef.current = setInterval(tick, 1000);
-  }, [cleanup, tick, requestWakeLock]);
+  }, [cleanup, tick]);
 
   const handleStop = useCallback(() => {
     cleanup();
