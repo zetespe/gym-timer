@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useLog, setState, patch } from "./store";
-import { exportObject, applyImport, extractJSON, summaryText, sortedSessions, claudePrompt } from "./model";
+import { exportObject, applyImport, extractJSON, summaryText, sortedSessions, aiPrompt } from "./model";
 import { copyText, toast } from "./ui";
 
 function fileName() { return `gymmy-${new Date().toISOString().slice(0, 10)}.json`; }
@@ -88,12 +88,13 @@ export default function Backup() {
         </div>
       )}
 
-      <h2>Talk to Claude</h2>
+      <h2>Work with an AI</h2>
+      <p className="muted small">Any assistant works — Claude, ChatGPT, Gemini. Copy the prompt below, paste it into the AI together with your plan or a description of your session, then paste its JSON answer back here.</p>
+      <button className="big" onClick={() => copyText(aiPrompt(S), "prompt")}><strong>Copy the prompt for your AI</strong><span>Teaches the AI the exact format — plans with technique details, or logged sessions.</span></button>
       <button className="big" onClick={() => last && copyText(summaryText(last, unit), "session")}><strong>Copy last session</strong><span>{last ? `${last.name} · ${last.date}` : "No sessions yet"}</span></button>
       <button className="big" onClick={() => copyText(JSON.stringify(exportObject(S, { full: false })), "JSON")}><strong>Copy recent history (JSON)</strong><span>Last 12 sessions plus the plan, for “how am I doing?”.</span></button>
-      <button className="big" onClick={() => copyText(claudePrompt(S), "prompt")}><strong>Copy the prompt for Claude</strong><span>Paste it first when you dictate a session or ask for a new plan, so the answer imports cleanly.</span></button>
-      <h3 style={{ marginTop: 16 }}>Paste from Claude</h3>
-      <p className="muted small">A gym-import block: new sessions, added workouts, or a replacement plan.</p>
+      <h3 style={{ marginTop: 16 }}>Paste from your AI</h3>
+      <p className="muted small">A gym-import block: new sessions, added workouts, a replacement plan, or updated training rules.</p>
       <textarea rows={4} value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder='{"type":"gym-import","sessions":[...]}' />
       <div className="row" style={{ marginTop: 8 }}><button className="btn primary" onClick={doPaste} disabled={!pasteText.trim()}>Import</button></div>
     </div>

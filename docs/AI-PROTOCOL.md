@@ -1,9 +1,10 @@
-# Gymmy ↔ Claude protocol
+# Gymmy ↔ AI protocol
 
-Gymmy stores everything on the phone. Claude never has direct access. Data
+Gymmy stores everything on the phone. No AI has direct access; any assistant
+(Claude, ChatGPT, Gemini, …) works. Data
 moves by copy/paste (Backup tab) in either direction.
 
-## From the app to Claude
+## From the app to the AI
 
 The user pastes one of:
 
@@ -16,10 +17,10 @@ The user pastes one of:
   ```
 - A `gym-export` JSON object: `{ "type": "gym-export", "plan": {...}, "sessions": [...] }`.
 
-## From Claude to the app
+## From the AI to the app
 
 Reply with exactly one JSON object the user pastes into Backup → Paste from
-Claude (or Plan → Paste a plan). Prose and code fences around it are ignored;
+your AI (or Plan → Paste a plan). Prose and code fences around it are ignored;
 the first `{...}` is parsed.
 
 ```json
@@ -57,16 +58,48 @@ Rules:
 To change the plan, send `plan` (replaces all workouts) or `workouts` (appends):
 
 ```json
-{ "type": "gym-import", "plan": { "name": "Autumn base", "workouts": [
-  { "id": "a", "name": "Workout A", "subtitle": "Push + hinge", "exercises": [
+{ "type": "gym-import", "plan": {
+  "name": "Autumn base",
+  "loadNote": "First two sessions back: run everything at ~80% of listed weights.",
+  "rules": [ "Last set feels easy → smallest increment next time",
+             "Slow reps before heavier load, pauses before volume" ],
+  "stopRules": [ "Pain during an exercise = stop",
+                 "Back feels worked rather than calm = regress immediately" ],
+  "workouts": [
+  { "id": "a", "name": "Workout A", "subtitle": "Push + hinge",
+    "intent": "Build the hinge pattern that protects the back", "exercises": [
     { "id": "goblet_squat", "name": "Goblet Squat", "mode": "reps", "sets": 3,
       "repsMin": 8, "repsMax": 10, "weight": 16, "increment": 1, "rest": 90,
-      "perSide": false, "bodyweight": false, "cue": "Elbows inside knees" },
+      "perSide": false, "bodyweight": false,
+      "cue": "Elbows inside knees, ribs down",
+      "steps": [ "Hold one dumbbell vertically against your chest, elbows tucked",
+                 "Feet shoulder-width, toes slightly out",
+                 "Sit straight down between your feet, elbows inside the knees",
+                 "Drive through the whole foot to stand" ],
+      "watchFor": [ "Chest collapsing forward", "Knees caving in", "Heels lifting" ],
+      "progression": "2s pause at the bottom, then 18–20 kg" },
     { "id": "dead_hang", "name": "Dead Hang", "mode": "time", "sets": 3, "secs": 30,
       "bodyweight": true, "rest": 90 }
   ] }
 ] } }
 ```
+
+Technique fields (all optional per exercise):
+
+- `cue` — one short reminder, always visible during the session.
+- `steps` — how to perform it, one step per array entry (shown in order).
+- `watchFor` — common faults, one per entry.
+- `progression` — when and how to make it harder.
+
+Plan-level fields (all optional):
+
+- `loadNote` — a temporary caution shown at the start of every session
+  (e.g. reduced load after a break). The user clears it in the Plan tab.
+- `rules` — the plan's progression rules; shown in the Plan tab.
+- `stopRules` — when to stop or regress; shown in the Plan tab and one tap
+  away inside a session.
+- Sending `plan` with only `loadNote`/`rules`/`stopRules` (no `workouts`)
+  updates just those without touching the workouts.
 
 Older phase-1 blocks (`plan.sessions[]`, `reps`, `planId`) are accepted and
 upgraded on import.

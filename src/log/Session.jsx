@@ -4,6 +4,7 @@ import { fmtDate, fmtEntry, lastFor, valKey, valUnit, newEntry, finalizeDraft, p
 import { Stepper, toast } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
+import Technique from "./Technique";
 import GymTimer from "../GymTimer";
 
 export default function Session({ onFinished, onExit }) {
@@ -90,6 +91,7 @@ export default function Session({ onFinished, onExit }) {
     <div className="page">
       <div className="hdr"><h1>{d.name}</h1><span className="muted small">{fmtDate(d.date)} · {mins} min</span></div>
       {workout && workout.intent && <p className="muted small">{workout.intent}</p>}
+      {S.plan.loadNote && <div className="banner">{S.plan.loadNote}</div>}
       {d.exercises.map((e, ei) => {
         const px = workout ? workout.exercises.find((x) => x.id === e.exId) : null;
         const last = lastFor(S.sessions, e.exId, { excludeId: d.id });
@@ -104,7 +106,8 @@ export default function Session({ onFinished, onExit }) {
             {targetText && <div className="target">{targetText}{px && px.rest ? ` · rest ${px.rest} s` : ""}</div>}
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
             {sug.text && <div className={"next " + sug.kind}>{sug.text}</div>}
-            {px && (px.cue || px.progression) && <details className="small muted" style={{ marginTop: 6 }}><summary>Cues</summary>{px.cue && <p>{px.cue}</p>}{px.progression && <p>{px.progression}</p>}</details>}
+            {px && px.cue && <div className="cue">{px.cue}</div>}
+            {px && <Technique x={px} />}
             <div className="sets">
               {e.sets.map((s, si) => (
                 <div className={"set" + (hasW ? "" : " nw")} key={si}>
@@ -127,6 +130,12 @@ export default function Session({ onFinished, onExit }) {
         );
       })}
       <button className="btn" onClick={addExercise}>+ Add exercise</button>
+      {S.plan.stopRules.length > 0 && (
+        <details className="techbox" style={{ marginTop: 14 }}>
+          <summary>Stop rules</summary>
+          <div className="tech"><ul>{S.plan.stopRules.map((r, i) => <li key={i}>{r}</li>)}</ul></div>
+        </details>
+      )}
       <h2>Session notes</h2>
       <textarea rows={2} placeholder="Anything about the whole session" value={d.notes || ""} onChange={(ev) => mut((dr) => { dr.notes = ev.target.value; })} />
       <div className="quick">

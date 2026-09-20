@@ -1,5 +1,52 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport } from "./model";
+import { emptyState, migrate, strList } from "./store";
+
+describe("technique fields and training rules", () => {
+  const planImport = {
+    type: "gym-import",
+    plan: {
+      name: "Test",
+      loadNote: "80% after the break",
+      rules: ["Last set easy → increment"],
+      stopRules: ["Pain = stop"],
+      workouts: [{ id: "a", name: "A", exercises: [{ id: "goblet_squat", name: "Goblet Squat", mode: "reps", sets: 3, repsMin: 8, repsMax: 10, weight: 16, cue: "Ribs down", steps: ["Hold the bell", "Sit down"], watchFor: ["Knees caving"], progression: "Pause, then 18 kg" }] }],
+    },
+  };
+
+  it("imports steps, watchFor, cue, progression and plan rules", () => {
+    const { state } = applyImport(emptyState(), planImport);
+    const x = state.plan.workouts[0].exercises[0];
+    expect(x.steps).toEqual(["Hold the bell", "Sit down"]);
+    expect(x.watchFor).toEqual(["Knees caving"]);
+    expect(x.cue).toBe("Ribs down");
+    expect(x.progression).toBe("Pause, then 18 kg");
+    expect(state.plan.loadNote).toBe("80% after the break");
+    expect(state.plan.rules).toEqual(["Last set easy → increment"]);
+    expect(state.plan.stopRules).toEqual(["Pain = stop"]);
+  });
+
+  it("updates rules alone without touching workouts", () => {
+    const { state: s1 } = applyImport(emptyState(), planImport);
+    const { state: s2, report } = applyImport(s1, { type: "gym-import", plan: { loadNote: "" } });
+    expect(s2.plan.workouts).toHaveLength(1);
+    expect(s2.plan.loadNote).toBe("");
+    expect(report).toContain("rules updated");
+  });
+
+  it("survives a storage migration round-trip", () => {
+    const { state } = applyImport(emptyState(), planImport);
+    const back = migrate(JSON.parse(JSON.stringify(state)));
+    expect(back.plan.workouts[0].exercises[0].steps).toEqual(["Hold the bell", "Sit down"]);
+    expect(back.plan.stopRules).toEqual(["Pain = stop"]);
+  });
+
+  it("accepts a newline string where a list is expected", () => {
+    expect(strList("a\nb\n\n c ")).toEqual(["a", "b", "c"]);
+    expect(strList(["x", " y "])).toEqual(["x", "y"]);
+    expect(strList(null)).toEqual([]);
+  });
+});
 
 const entries = [
   { exId: "goblet_squat", name: "Goblet Squat", mode: "reps", bodyweight: false },
