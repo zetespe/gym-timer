@@ -12,6 +12,10 @@ export default defineConfig({
       includeAssets: ['apple-touch-icon.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+        globIgnores: ['about/**'],
+        // The about page is a real page, not an app route: the service
+        // worker must not answer for it with the app shell.
+        navigateFallbackDenylist: [/\/about\//],
       },
       manifest: {
         name: 'Gymmy',
