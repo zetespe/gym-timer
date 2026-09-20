@@ -9,6 +9,7 @@ export default function Backup() {
   const S = useLog();
   const fileRef = useRef(null);
   const [pasteText, setPasteText] = useState("");
+  const [pending, setPending] = useState(null); // parsed backup waiting for merge/replace choice
   const unit = S.settings.unit;
   const last = sortedSessions(S.sessions)[0];
 
@@ -37,18 +38,25 @@ export default function Backup() {
     markBackedUp(); toast("Backup downloaded");
   };
 
+  // Restoring is two steps: read the file, then let the user choose merge /
+  // replace / cancel on an in-app panel. Never a blocking confirm(), and only
+  // an explicit tap on "Replace" is destructive.
   const restoreFile = async (file) => {
     if (!file) return;
     try {
       const text = await file.text();
       const obj = extractJSON(text);
-      const mode = S.sessions.length || S.plan.workouts.length ? (confirm("Merge into what is on this phone? Cancel = replace everything with the backup.") ? "merge" : "replace") : "merge";
-      if (mode === "replace") {
-        const fresh = applyImport({ ...S, plan: { name: "", workouts: [] }, sessions: [] }, obj);
-        setState(fresh.state); toast("Restored: " + fresh.report, 4000);
-      } else {
-        const r = applyImport(S, obj); setState(r.state); toast("Restored: " + r.report, 4000);
-      }
+      if (!S.sessions.length && !S.plan.workouts.length) { doRestore(obj, "merge"); return; }
+      setPending({ obj, sessions: Array.isArray(obj.sessions) ? obj.sessions.length : 0, workouts: obj.plan ? (obj.plan.workouts || obj.plan.sessions || []).length : Array.isArray(obj.workouts) ? obj.workouts.length : 0, date: obj.exportedAt ? new Date(obj.exportedAt).toLocaleDateString() : null });
+    } catch (e) { toast("Restore failed: " + e.message, 4000); }
+  };
+
+  const doRestore = (obj, mode) => {
+    setPending(null);
+    try {
+      const base = mode === "replace" ? { ...S, plan: { name: "", workouts: [] }, sessions: [] } : S;
+      const r = applyImport(base, obj);
+      setState(r.state); toast("Restored: " + r.report, 4000);
     } catch (e) { toast("Restore failed: " + e.message, 4000); }
   };
 
@@ -67,6 +75,17 @@ export default function Backup() {
       <button className="big primary" onClick={saveBackup}><strong>Save backup…</strong><span>Opens the share sheet or a save dialog. Pick the folder yourself.</span></button>
       <button className="big" onClick={() => fileRef.current && fileRef.current.click()}><strong>Restore from a backup file</strong><span>Merge into this phone, or replace everything.</span></button>
       <input ref={fileRef} type="file" accept=".json,application/json,text/plain" style={{ display: "none" }} onChange={(e) => { restoreFile(e.target.files[0]); e.target.value = ""; }} />
+      {pending && (
+        <div className="card">
+          <h3>Restore backup{pending.date ? ` from ${pending.date}` : ""}?</h3>
+          <p className="muted small">It holds {pending.sessions} session(s) and {pending.workouts} workout(s). This phone has {S.sessions.length} session(s) and {S.plan.workouts.length} workout(s).</p>
+          <div className="row wrap" style={{ marginTop: 8 }}>
+            <button className="btn primary" onClick={() => doRestore(pending.obj, "merge")}>Merge into this phone</button>
+            <button className="btn danger" onClick={() => doRestore(pending.obj, "replace")}>Replace everything</button>
+            <button className="btn ghost" onClick={() => setPending(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       <h2>Talk to Claude</h2>
       <button className="big" onClick={() => last && copyText(summaryText(last, unit), "session")}><strong>Copy last session</strong><span>{last ? `${last.name} · ${last.date}` : "No sessions yet"}</span></button>
