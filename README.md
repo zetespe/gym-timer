@@ -17,6 +17,7 @@ Talking to an AI assistant (dictating a session, asking for a plan, analysis) wo
 copy/paste from the Backup tab; the format is in `docs/AI-PROTOCOL.md`.
 
 **Live app:** https://zetespe.github.io/gym-timer/
+**About page:** https://zetespe.github.io/gym-timer/about/
 
 ## Install on your phone
 
@@ -40,3 +41,13 @@ Pushing to `main` auto-deploys to GitHub Pages via GitHub Actions.
 
 App icons are generated from `icon.svg` (e.g. `rsvg-convert -w 512 -h 512
 icon.svg -o public/icon-512.png`).
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md) — free to use, copy, modify and
+share for personal and other noncommercial purposes. **Commercial use
+requires a separate paid license** — open an issue or contact
+[@zetespe](https://github.com/zetespe). Contributions are welcome; see
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+Required Notice: Copyright zetespe (https://github.com/zetespe/gym-timer)

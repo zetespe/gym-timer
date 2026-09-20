@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>About Gymmy</title>
+  <meta name="description" content="Gymmy is a free, privacy-first workout log and rep timer. No account, no server, no tracking — your training data never leaves your phone." />
+  <meta name="theme-color" content="#000000" />
+  <link rel="icon" type="image/png" href="../icon-192.png" />
+  <style>
+    :root {
+      --bg: #000; --panel: #131313; --panel2: #1c1c1c; --line: #2a2a2a;
+      --fg: #f2f2f2; --muted: #9a9a9a; --dim: #6b6b6b;
+      --green: #30d158; --yellow: #ffd60a; --blue: #64a7ff; --red: #ff453a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 -apple-system, "SF Pro Text", system-ui, Segoe UI, Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }
+    main { max-width: 640px; margin: 0 auto; padding: 40px 16px 80px; }
+    h1 { font-size: 34px; letter-spacing: -0.02em; margin: 0 0 4px; }
+    h2 { font-size: 21px; margin: 40px 0 10px; letter-spacing: -0.01em; }
+    p { margin: 10px 0; }
+    .tag { color: var(--green); font-weight: 600; font-size: 15px; letter-spacing: 0.02em; }
+    .muted { color: var(--muted); } .small { font-size: 14px; }
+    .cta { display: inline-block; background: var(--green); color: #05200d; font-weight: 700; padding: 14px 22px; border-radius: 14px; text-decoration: none; margin: 18px 12px 0 0; }
+    .cta.ghost { background: var(--panel2); color: var(--fg); border: 1px solid var(--line); font-weight: 600; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 12px 0; }
+    .card h3 { margin: 0 0 6px; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    ul { padding-left: 22px; margin: 10px 0; } li { margin: 6px 0; }
+    a { color: var(--blue); }
+    .warn { border-left: 3px solid var(--yellow); padding-left: 12px; }
+    .ok { color: var(--green); }
+    footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dim); font-size: 14px; }
+    code { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 14px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="tag">FREE · OFFLINE · NO ACCOUNT · NO TRACKING</div>
+  <h1>Gymmy</h1>
+  <p class="muted">A workout log and rep timer that lives on your phone — and only on your phone.</p>
+
+  <a class="cta" href="../">Open the app</a>
+  <a class="cta ghost" href="https://github.com/zetespe/gym-timer">View the source</a>
+
+  <h2>Privacy first — literally no server</h2>
+  <p>Gymmy is a web app you install from your browser. After the first load it
+  runs entirely on your device: your plan, every logged set, every note is
+  stored in the phone's local storage. There is <b>no account, no cloud, no
+  analytics, no cookies, and no server that could see your data</b> — the
+  hosting only hands your phone the app code. If you're offline in a basement
+  gym, everything still works.</p>
+  <p>The flip side, stated honestly: <b>your data exists in exactly one
+  place</b>. The Backup tab exports everything to a single file you keep
+  wherever you choose (Files, iCloud, AirDrop) — backing up is your job, and
+  the app reminds you every few sessions.</p>
+
+  <h2>What it does</h2>
+  <div class="card"><h3>📋 A plan that teaches you</h3><p>Workouts with target sets × reps, weights and rest — plus per-exercise technique: how to do it step by step, common faults to watch for, and when to progress. One tap mid-set shows the form cues.</p></div>
+  <div class="card"><h3>✍️ One-tap logging</h3><p>Sets are prefilled from last time, so repeating is a single tick. Or type/dictate "goblet 16 3x8 felt easy" and it's parsed into sets.</p></div>
+  <div class="card"><h3>📈 Progression that decides for you</h3><p>Double progression built in: hit the top of the rep range → it suggests more weight next time; miss the bottom twice → it suggests backing off. No spreadsheet math between sets.</p></div>
+  <div class="card"><h3>⏱ Timers</h3><p>A rest countdown after every ticked set (with beeps and a voice "Go"), and a hold/swap rep timer with voice cues for timed exercises — screen stays awake through the workout.</p></div>
+  <div class="card"><h3>🤖 Works with any AI — on your terms</h3><p>No AI is wired in. Instead, you copy: a prompt teaches Claude, ChatGPT or Gemini the app's format; paste your plan or dictate your session to the AI, paste its answer back. You decide what leaves your phone, every single time.</p></div>
+
+  <h2>Honest limitations</h2>
+  <ul>
+    <li class="warn">On iPhone, a backgrounded web app is frozen: if you switch to another app during a rest, the "Go" sound can't play at zero. On return the app shows the true time and announces how late you are.</li>
+    <li class="warn">Data lives on one phone. Lose the phone without a backup file, lose the log. (Make backups.)</li>
+    <li class="warn">It's a web app: install goes through the browser's "Add to Home Screen", not an app store.</li>
+  </ul>
+
+  <h2>Install it</h2>
+  <ul>
+    <li><b>iPhone (Safari):</b> <a href="../">open the app</a> → Share → <b>Add to Home Screen</b>.</li>
+    <li><b>Android (Chrome):</b> open the app → ⋮ → <b>Add to Home screen</b>.</li>
+  </ul>
+
+  <h2>For the curious</h2>
+  <p>Everything is open to read — the app is a small React + Vite PWA with no
+  dependencies beyond React itself:</p>
+  <ul>
+    <li><a href="https://github.com/zetespe/gym-timer">Source code</a> — storage is versioned <code>localStorage</code> with migrations; the progression rule and parsers are pure, tested functions.</li>
+    <li><a href="https://github.com/zetespe/gym-timer/blob/main/docs/AI-PROTOCOL.md">The AI protocol</a> — the exact JSON format the copy-paste AI workflow uses.</li>
+    <li><a href="https://github.com/zetespe/gym-timer/blob/main/BACKLOG.md">The backlog</a> — known limitations and planned work, in the open.</li>
+    <li><a href="https://github.com/zetespe/gym-timer/blob/main/CONTRIBUTING.md">Contributing</a> — issues and pull requests welcome; every change is reviewed before it ships.</li>
+  </ul>
+
+  <h2>License</h2>
+  <p>Source-available under the
+  <a href="https://github.com/zetespe/gym-timer/blob/main/LICENSE.md">PolyForm Noncommercial License 1.0.0</a>:
+  <span class="ok">free to use, copy, modify and share for personal and other
+  noncommercial purposes.</span> Commercial use requires a separate paid
+  license — <a href="https://github.com/zetespe/gym-timer/issues">open an issue</a>
+  to talk.</p>
+
+  <footer>Gymmy · built by <a href="https://github.com/zetespe">zetespe</a> · your data never leaves your phone.</footer>
+</main>
+</body>
+</html>
