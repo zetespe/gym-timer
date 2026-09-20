@@ -1,102 +1,40 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { beep, doubleBeep, tripleBeep, speak } from "./audio";
+import { useWakeLock, wakeLockSupported } from "./useWakeLock";
+import { getState, patch } from "./log/store";
 
 const PHASE_IDLE = "idle";
 const PHASE_HOLD = "hold";
 const PHASE_SWAP = "swap";
 const PHASE_COUNTDOWN = "countdown";
 
-function beep(freq = 880, duration = 150, vol = 0.5) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = freq;
-    gain.gain.value = vol;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
-    osc.stop(ctx.currentTime + duration / 1000 + 0.05);
-  } catch (e) {}
-}
-
-function doubleBeep() {
-  beep(1100, 120, 0.6);
-  setTimeout(() => beep(1100, 120, 0.6), 180);
-}
-
-function tripleBeep() {
-  beep(1320, 100, 0.7);
-  setTimeout(() => beep(1320, 100, 0.7), 150);
-  setTimeout(() => beep(1320, 100, 0.7), 300);
-}
-
-function speak(text) {
-  try {
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.1;
-    u.pitch = 0.9;
-    u.volume = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  } catch (e) {}
-}
-
-export default function GymTimer() {
-  const [holdTime, setHoldTime] = useState(20);
-  const [swapTime, setSwapTime] = useState(4);
+// `preset` overrides the saved hold/swap times (used when opened from a timed
+// exercise); `onResult({ reps, hold })` is called on STOP when provided.
+export default function GymTimer({ preset, onResult } = {}) {
+  const saved = getState().settings.timer || { hold: 20, swap: 4 };
+  const [holdTime, setHoldTimeRaw] = useState(preset?.hold ?? saved.hold);
+  const [swapTime, setSwapTimeRaw] = useState(preset?.swap ?? saved.swap);
+  const setHoldTime = (v) => { setHoldTimeRaw(v); if (!preset) patch((st) => { st.settings.timer.hold = v; }); };
+  const setSwapTime = (v) => { setSwapTimeRaw(v); if (!preset) patch((st) => { st.settings.timer.swap = v; }); };
   const [phase, setPhase] = useState(PHASE_IDLE);
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
   const [totalReps, setTotalReps] = useState(0);
-  const [wakeLockActive, setWakeLockActive] = useState(false);
   const [dimmed, setDimmed] = useState(false);
   const intervalRef = useRef(null);
   const phaseRef = useRef(PHASE_IDLE);
   const timeRef = useRef(0);
   const repRef = useRef(0);
-  const wakeLockRef = useRef(null);
 
-  const wakeLockSupported = typeof navigator !== "undefined" && "wakeLock" in navigator;
-
-  const requestWakeLock = useCallback(async () => {
-    if (!wakeLockSupported) return;
-    try {
-      wakeLockRef.current = await navigator.wakeLock.request("screen");
-      setWakeLockActive(true);
-      wakeLockRef.current.addEventListener("release", () => setWakeLockActive(false));
-    } catch (e) {
-      setWakeLockActive(false);
-    }
-  }, [wakeLockSupported]);
-
-  const releaseWakeLock = useCallback(async () => {
-    if (wakeLockRef.current) {
-      try { await wakeLockRef.current.release(); } catch (e) {}
-      wakeLockRef.current = null;
-      setWakeLockActive(false);
-    }
-  }, []);
-
-  // Re-acquire wake lock when tab becomes visible again (browser releases it on tab switch)
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && phaseRef.current !== PHASE_IDLE) {
-        requestWakeLock();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [requestWakeLock]);
+  const wakeLockActive = useWakeLock(phase !== PHASE_IDLE);
 
   const cleanup = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    releaseWakeLock();
     setDimmed(false);
-  }, [releaseWakeLock]);
+  }, []);
 
   useEffect(() => () => cleanup(), [cleanup]);
 
@@ -146,7 +84,6 @@ export default function GymTimer() {
 
   const handleStart = useCallback(() => {
     cleanup();
-    requestWakeLock();
     repRef.current = 0;
     setRep(0);
     setTotalReps(0);
@@ -157,15 +94,17 @@ export default function GymTimer() {
     speak("Get ready!");
     beep(440, 100, 0.3);
     intervalRef.current = setInterval(tick, 1000);
-  }, [cleanup, tick, requestWakeLock]);
+  }, [cleanup, tick]);
 
   const handleStop = useCallback(() => {
     cleanup();
+    const completed = phaseRef.current === PHASE_HOLD ? Math.max(0, repRef.current - 1) : repRef.current;
     phaseRef.current = PHASE_IDLE;
     setPhase(PHASE_IDLE);
     speak("Done!");
     doubleBeep();
-  }, [cleanup]);
+    if (onResult) onResult({ reps: completed, hold: holdTime });
+  }, [cleanup, onResult, holdTime]);
 
   const handleTestSound = useCallback(() => {
     beep(880, 150, 0.5);
