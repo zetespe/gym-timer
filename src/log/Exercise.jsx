@@ -1,5 +1,5 @@
 import { useLog } from "./store";
-import { fmtDate, fmtEntry, historyFor, suggest } from "./model";
+import { fmtDate, fmtEntry, fmtTarget, historyFor, suggest } from "./model";
 import Technique from "./Technique";
 
 // Library page for one exercise: full technique, progression and recent
@@ -27,7 +27,7 @@ export default function Exercise({ params, go }) {
   }
 
   const name = px ? px.name : hist[0].entry.name;
-  const target = px ? `${px.sets}×${px.mode === "reps" ? (px.repsMin === px.repsMax ? px.repsMin : px.repsMin + "–" + px.repsMax) : px.mode === "time" ? px.secs + " s" : px.dist + " m"}${px.perSide ? " / side" : ""}${!px.bodyweight && px.weight != null ? ` · ${px.weight} ${unit}` : ""}${px.rest ? ` · rest ${px.rest} s` : ""}` : "";
+  const target = px ? fmtTarget(px, unit) : "";
   const sug = px ? suggest(S, px) : { text: "" };
 
   return (

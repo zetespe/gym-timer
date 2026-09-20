@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLog, patch, setState, getState, slug } from "./store";
-import { fmtDate, fmtEntry, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, findExercise } from "./model";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, findExercise } from "./model";
 import { Stepper, toast } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
@@ -99,11 +99,11 @@ export default function Session({ onFinished, onExit }) {
         const allDone = e.sets.length > 0 && e.sets.every((s) => s.done);
         const k = valKey(e.mode);
         const hasW = !e.bodyweight;
-        const targetText = px ? (px.target || `${px.sets}×${px.mode === "reps" ? (px.repsMin === px.repsMax ? px.repsMin : px.repsMin + "–" + px.repsMax) : px.mode === "time" ? px.secs + " s" : px.dist + " m"}${px.perSide ? " / side" : ""}${!px.bodyweight && px.weight != null ? " · " + px.weight + " " + unit : ""}`) : "";
+        const targetText = px ? (px.target ? px.target + (px.rest ? ` · rest ${px.rest} s` : "") : fmtTarget(px, unit)) : "";
         return (
           <div className={"card" + (allDone ? " done" : "")} key={ei}>
             <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>{allDone && <span className="pill ok">✓ done</span>}</div>
-            {targetText && <div className="target">{targetText}{px && px.rest ? ` · rest ${px.rest} s` : ""}</div>}
+            {targetText && <div className="target">{targetText}</div>}
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
             {sug.text && <div className={"next " + sug.kind}>{sug.text}</div>}
             {px && px.cue && <div className="cue">{px.cue}</div>}

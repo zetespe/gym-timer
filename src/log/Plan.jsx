@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLog, patch, setState, uid, slug, migrateExercise, resetAll } from "./store";
-import { parsePlanText, applyImport, extractJSON } from "./model";
+import { parsePlanText, applyImport, extractJSON, fmtTarget } from "./model";
 import { Field, Stepper, toast } from "./ui";
 
 export default function Plan({ params, go }) {
@@ -48,7 +48,7 @@ export default function Plan({ params, go }) {
         </div>
       ))}
       <div className="row wrap"><button className="btn primary" onClick={addWorkout}>+ Add workout</button><button className="btn" onClick={() => setPasting(true)}>Paste a plan</button></div>
-      {S.plan.workouts.length > 0 && (
+      {(S.plan.workouts.length > 0 || S.plan.loadNote || S.plan.rules.length > 0 || S.plan.stopRules.length > 0) && (
         <>
           <h2>Training rules</h2>
           <Field label="Load note (shown at the start of every session — clear it when it no longer applies)">
@@ -122,7 +122,7 @@ function WorkoutEditor({ w, unit, onBack }) {
           <div className="list-item" key={i}>
             <button className="grow" style={{ textAlign: "left", padding: "4px 0" }} onClick={() => setExIdx(i)}>
               <div>{x.name}</div>
-              <div className="muted small">{x.sets}×{x.mode === "reps" ? (x.repsMin === x.repsMax ? x.repsMin : x.repsMin + "–" + x.repsMax) : x.mode === "time" ? x.secs + " s" : x.dist + " m"}{x.perSide ? " / side" : ""}{!x.bodyweight && x.weight != null ? ` · ${x.weight} ${unit}` : ""}{x.rest ? ` · rest ${x.rest} s` : ""}</div>
+              <div className="muted small">{fmtTarget(x, unit)}</div>
             </button>
             <button className="iconbtn" onClick={() => move(i, -1)}>↑</button>
             <button className="iconbtn" onClick={() => move(i, 1)}>↓</button>
@@ -170,7 +170,7 @@ Suitcase Carry 3x30m 16kg per side`}</pre>
       {preview && (
         <>
           <h2>Found</h2>
-          {preview.map((w) => <div className="card" key={w.id}><h3>{w.name}</h3><table><tbody>{w.exercises.map((x, i) => <tr key={i}><td>{x.name}</td><td className="muted small">{x.sets}×{x.mode === "reps" ? x.repsMin + (x.repsMax !== x.repsMin ? "–" + x.repsMax : "") : x.mode === "time" ? x.secs + " s" : x.dist + " m"}{x.perSide ? " / side" : ""}{x.bodyweight ? " · bodyweight" : ` · ${x.weight} ${S.settings.unit}`}{x.rest ? ` · rest ${x.rest} s` : ""}</td></tr>)}</tbody></table></div>)}
+          {preview.map((w) => <div className="card" key={w.id}><h3>{w.name}</h3><table><tbody>{w.exercises.map((x, i) => <tr key={i}><td>{x.name}</td><td className="muted small">{fmtTarget(x, S.settings.unit)}</td></tr>)}</tbody></table></div>)}
           <div className="row wrap"><button className="btn primary" onClick={() => accept(false)}>Add to my plan</button>{S.plan.workouts.length > 0 && <button className="btn" onClick={() => { if (confirm("Replace the current workouts with these?")) accept(true); }}>Replace my plan</button>}</div>
         </>
       )}

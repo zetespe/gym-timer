@@ -26,6 +26,29 @@ describe("technique fields and training rules", () => {
     expect(state.plan.stopRules).toEqual(["Pain = stop"]);
   });
 
+  it("a full plan replacement resets omitted name, load note and rules", () => {
+    const { state: s1 } = applyImport(emptyState(), planImport);
+    const { state: s2 } = applyImport(s1, { type: "gym-import", plan: { name: "New block", workouts: [{ id: "b", name: "B", exercises: [] }] } });
+    expect(s2.plan.name).toBe("New block");
+    expect(s2.plan.loadNote).toBe("");
+    expect(s2.plan.rules).toEqual([]);
+    expect(s2.plan.stopRules).toEqual([]);
+  });
+
+  it("a name-only plan import renames without throwing", () => {
+    const { state, report } = applyImport(emptyState(), { type: "gym-import", plan: { name: "Winter block" } });
+    expect(state.plan.name).toBe("Winter block");
+    expect(report).toContain("renamed");
+  });
+
+  it("tolerates a pre-schema-3 base state (replace-restore path)", () => {
+    const oldBase = { ...emptyState(), plan: { name: "", workouts: [] } };
+    const { state } = applyImport(oldBase, { type: "gym-import", sessions: [{ id: "x", date: "2026-09-20", exercises: [] }] });
+    expect(state.plan.rules).toEqual([]);
+    expect(state.plan.stopRules).toEqual([]);
+    expect(state.plan.loadNote).toBe("");
+  });
+
   it("updates rules alone without touching workouts", () => {
     const { state: s1 } = applyImport(emptyState(), planImport);
     const { state: s2, report } = applyImport(s1, { type: "gym-import", plan: { loadNote: "" } });

@@ -1,6 +1,6 @@
 // Pure helpers over the log state: formatting, history lookups, the next-weight
 // rule, the quick-log parser, plan-text parser and export/import.
-import { normalizeSession, migrateWorkout, slug, uid, today, strList } from "./store";
+import { normalizeSession, migrateWorkout, slug, uid, today, strList, emptyState } from "./store";
 
 export const valKey = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "r");
 export const valUnit = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "reps");
@@ -23,6 +23,17 @@ export function fmtEntry(e, unit = "kg") {
   if (ws.length > 1) out = sets.map((s) => (s.w != null ? s.w + " " + unit + " × " : "") + (setVal(s, e.mode) ?? "·") + suffix).join(", ");
   else out = (ws.length === 1 && !(e.bodyweight && ws[0] === 0) ? ws[0] + " " + unit + " × " : "") + vals.join(", ") + suffix;
   if (e.perSide) out += " / side";
+  return out;
+}
+
+// One shared "3×8–10 / side · 16 kg · rest 90 s" formatter for a plan
+// exercise; every screen that shows a target uses this.
+export function fmtTarget(x, unit) {
+  const val = x.mode === "reps" ? (x.repsMin === x.repsMax ? x.repsMin : x.repsMin + "–" + x.repsMax) : x.mode === "time" ? x.secs + " s" : x.dist + " m";
+  let out = `${x.sets}×${val}${x.perSide ? " / side" : ""}`;
+  if (x.bodyweight) out += " · bodyweight";
+  else if (x.weight != null) out += ` · ${x.weight} ${unit}`;
+  if (x.rest) out += ` · rest ${x.rest} s`;
   return out;
 }
 
@@ -220,18 +231,32 @@ export function exportObject(state, { full = true } = {}) {
 
 export function applyImport(state, obj) {
   const next = structuredClone(state);
+  // The base state may predate the current schema (e.g. a restore built from
+  // an old backup); make sure every plan field exists before touching it.
+  next.plan = Object.assign(structuredClone(emptyState().plan), next.plan);
+  next.plan.rules = strList(next.plan.rules);
+  next.plan.stopRules = strList(next.plan.stopRules);
   const report = [];
   if (obj.plan) {
     const p = obj.plan;
     if (p.workouts || p.sessions) {
-      next.plan.workouts = (p.workouts || p.sessions).map(migrateWorkout);
+      // A full plan replacement replaces ALL of it: omitted name, load note
+      // and rules reset rather than silently surviving from the old plan.
+      next.plan = {
+        name: p.name || "",
+        loadNote: p.loadNote != null ? String(p.loadNote) : "",
+        rules: strList(p.rules),
+        stopRules: strList(p.stopRules),
+        workouts: (p.workouts || p.sessions).map(migrateWorkout),
+      };
       report.push("plan replaced");
+    } else {
+      if (p.name != null) { next.plan.name = p.name; report.push("plan renamed"); }
+      if (p.loadNote != null) next.plan.loadNote = String(p.loadNote);
+      if (p.rules != null) next.plan.rules = strList(p.rules);
+      if (p.stopRules != null) next.plan.stopRules = strList(p.stopRules);
+      if (p.loadNote != null || p.rules != null || p.stopRules != null) report.push("training rules updated");
     }
-    if (p.name != null) next.plan.name = p.name;
-    if (p.loadNote != null) next.plan.loadNote = String(p.loadNote);
-    if (p.rules != null) next.plan.rules = strList(p.rules);
-    if (p.stopRules != null) next.plan.stopRules = strList(p.stopRules);
-    if (!p.workouts && !p.sessions && (p.loadNote != null || p.rules != null || p.stopRules != null)) report.push("training rules updated");
   }
   if (Array.isArray(obj.workouts)) {
     for (const w of obj.workouts) next.plan.workouts.push(migrateWorkout(w));
