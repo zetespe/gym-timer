@@ -19,7 +19,7 @@ export default function Today({ go, justFinished }) {
         <p className="muted">Everything you record stays on this phone. Nothing is uploaded anywhere.</p>
         <h2>Start with a plan</h2>
         <button className="big primary" onClick={() => go("plan", { edit: "new" })}><strong>Build a plan</strong><span>Add workouts and exercises by hand.</span></button>
-        <button className="big" onClick={() => go("plan", { paste: true })}><strong>Paste a plan</strong><span>From Notion, a coach, or a Claude chat. Lines like “Goblet Squat 3x8-10 16kg”.</span></button>
+        <button className="big" onClick={() => go("plan", { paste: true })}><strong>Paste a plan</strong><span>From Notion, a coach, or an AI chat. Lines like “Goblet Squat 3x8-10 16kg”.</span></button>
         <button className="big" onClick={() => go("backup")}><strong>Restore a backup</strong><span>Pick a backup file you saved earlier.</span></button>
         <button className="big" onClick={() => start(null)}><strong>Just log a free session</strong><span>No plan needed. Add exercises as you go.</span></button>
       </div>
@@ -34,7 +34,7 @@ export default function Today({ go, justFinished }) {
         <div className="card">
           <div className="hdr"><h3>Saved ✓ {finished.name}</h3><span className="muted small">{fmtDate(finished.date)}</span></div>
           <pre>{summaryText(finished, unit)}</pre>
-          <div className="row"><button className="btn primary" onClick={() => copyText(summaryText(finished, unit), "summary")}>Copy for Claude</button><button className="btn" onClick={() => go("backup")}>Back up</button></div>
+          <div className="row"><button className="btn primary" onClick={() => copyText(summaryText(finished, unit), "summary")}>Copy for your AI</button><button className="btn" onClick={() => go("backup")}>Back up</button></div>
         </div>
       )}
       {needBackup && <div className="banner">{S.settings.sessionsSinceBackup} sessions since your last backup. <button className="link" onClick={() => go("backup")}>Save one now</button>.</div>}

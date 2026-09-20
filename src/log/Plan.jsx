@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLog, patch, setState, uid, slug, migrateExercise, resetAll } from "./store";
-import { parsePlanText, applyImport, extractJSON } from "./model";
+import { parsePlanText, applyImport, extractJSON, fmtTarget } from "./model";
 import { Field, Stepper, toast } from "./ui";
 
 export default function Plan({ params, go }) {
@@ -37,7 +37,7 @@ export default function Plan({ params, go }) {
         <div className="card" key={w.id}>
           <div className="hdr"><h3>{w.name}</h3><span className="muted small">{w.exercises.length} exercises</span></div>
           {w.subtitle && <div className="muted small">{w.subtitle}</div>}
-          <div className="muted small" style={{ marginTop: 4 }}>{w.exercises.map((x) => x.name).join(" · ")}</div>
+          <div style={{ marginTop: 4 }}>{w.exercises.map((x, j) => <button key={j} className="exlink" onClick={() => go("exercise", { id: x.id })}>{x.name}</button>)}</div>
           <div className="ex-actions">
             <button className="btn sm" onClick={() => setEditing(w.id)}>Edit</button>
             <button className="btn sm ghost" onClick={() => patch((s) => move(s.plan.workouts, i, -1))}>↑</button>
@@ -48,6 +48,20 @@ export default function Plan({ params, go }) {
         </div>
       ))}
       <div className="row wrap"><button className="btn primary" onClick={addWorkout}>+ Add workout</button><button className="btn" onClick={() => setPasting(true)}>Paste a plan</button></div>
+      {(S.plan.workouts.length > 0 || S.plan.loadNote || S.plan.rules.length > 0 || S.plan.stopRules.length > 0) && (
+        <>
+          <h2>Training rules</h2>
+          <Field label="Load note (shown at the start of every session — clear it when it no longer applies)">
+            <textarea rows={2} value={S.plan.loadNote} onChange={(e) => patch((s) => { s.plan.loadNote = e.target.value; })} />
+          </Field>
+        </>
+      )}
+      {S.plan.rules.length > 0 && (
+        <div className="card"><h3>Progression</h3><div className="tech"><ul>{S.plan.rules.map((r, i) => <li key={i}>{r}</li>)}</ul></div></div>
+      )}
+      {S.plan.stopRules.length > 0 && (
+        <div className="card"><h3>Stop rules</h3><div className="tech"><ul>{S.plan.stopRules.map((r, i) => <li key={i}>{r}</li>)}</ul></div></div>
+      )}
       <h2>Settings</h2>
       <div className="row"><span className="grow">Weight unit</span><select className="text" style={{ width: "auto" }} value={S.settings.unit} onChange={(e) => patch((s) => { s.settings.unit = e.target.value; })}><option value="kg">kg</option><option value="lb">lb</option></select></div>
       <div className="row" style={{ marginTop: 8 }}><span className="grow">Rest countdown after each set</span><input type="checkbox" checked={!!S.settings.restTimer} onChange={(e) => patch((s) => { s.settings.restTimer = e.target.checked; })} style={{ width: 24, height: 24 }} /></div>
@@ -86,7 +100,9 @@ function WorkoutEditor({ w, unit, onBack }) {
           <Field label={`Starting weight (${unit})`}><Stepper value={x.weight} step={unit === "kg" ? 1 : 2.5} onChange={(v) => set("weight", v)} /></Field>
           <Field label={`Increase by (${unit})`}><Stepper value={x.increment} step={0.5} onChange={(v) => set("increment", v || 0.5)} min={0.5} /></Field>
         </div>}
-        <Field label="Cues (shown during the session)"><textarea rows={2} value={x.cue} onChange={(e) => set("cue", e.target.value)} /></Field>
+        <Field label="Cue (one short reminder, always visible during the session)"><textarea rows={2} value={x.cue} onChange={(e) => set("cue", e.target.value)} /></Field>
+        <Field label="How to do it (one step per line)"><textarea rows={4} value={(x.steps || []).join("\n")} onChange={(e) => set("steps", e.target.value.split("\n"))} onBlur={(e) => set("steps", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))} /></Field>
+        <Field label="Watch for (common faults, one per line)"><textarea rows={3} value={(x.watchFor || []).join("\n")} onChange={(e) => set("watchFor", e.target.value.split("\n"))} onBlur={(e) => set("watchFor", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))} /></Field>
         <Field label="Progression note"><textarea rows={2} value={x.progression} onChange={(e) => set("progression", e.target.value)} /></Field>
         <p className="muted small">Next-weight rule: all sets at the top of the range → weight goes up by the increment. In range but short of the top → repeat. Below the bottom twice in a row → about 10% less.</p>
         <button className="btn primary" onClick={() => setExIdx(null)}>Done</button>
@@ -106,7 +122,7 @@ function WorkoutEditor({ w, unit, onBack }) {
           <div className="list-item" key={i}>
             <button className="grow" style={{ textAlign: "left", padding: "4px 0" }} onClick={() => setExIdx(i)}>
               <div>{x.name}</div>
-              <div className="muted small">{x.sets}×{x.mode === "reps" ? (x.repsMin === x.repsMax ? x.repsMin : x.repsMin + "–" + x.repsMax) : x.mode === "time" ? x.secs + " s" : x.dist + " m"}{x.perSide ? " / side" : ""}{!x.bodyweight && x.weight != null ? ` · ${x.weight} ${unit}` : ""}{x.rest ? ` · rest ${x.rest} s` : ""}</div>
+              <div className="muted small">{fmtTarget(x, unit)}</div>
             </button>
             <button className="iconbtn" onClick={() => move(i, -1)}>↑</button>
             <button className="iconbtn" onClick={() => move(i, 1)}>↓</button>
@@ -143,7 +159,7 @@ function PastePlan({ onDone }) {
     <div className="page">
       <p><button className="link" onClick={onDone}>‹ Plan</button></p>
       <h1>Paste a plan</h1>
-      <p className="muted small">One workout per heading, one exercise per line. Weights, rest and “per side” are optional. A JSON block from Claude works here too.</p>
+      <p className="muted small">One workout per heading, one exercise per line. Weights, rest and “per side” are optional. A JSON block from your AI works here too.</p>
       <pre className="small">{`# Workout A
 Goblet Squat 3x8-10 16kg rest 90
 Push-up 3x6-8 bodyweight
@@ -154,7 +170,7 @@ Suitcase Carry 3x30m 16kg per side`}</pre>
       {preview && (
         <>
           <h2>Found</h2>
-          {preview.map((w) => <div className="card" key={w.id}><h3>{w.name}</h3><table><tbody>{w.exercises.map((x, i) => <tr key={i}><td>{x.name}</td><td className="muted small">{x.sets}×{x.mode === "reps" ? x.repsMin + (x.repsMax !== x.repsMin ? "–" + x.repsMax : "") : x.mode === "time" ? x.secs + " s" : x.dist + " m"}{x.perSide ? " / side" : ""}{x.bodyweight ? " · bodyweight" : ` · ${x.weight} ${S.settings.unit}`}{x.rest ? ` · rest ${x.rest} s` : ""}</td></tr>)}</tbody></table></div>)}
+          {preview.map((w) => <div className="card" key={w.id}><h3>{w.name}</h3><table><tbody>{w.exercises.map((x, i) => <tr key={i}><td>{x.name}</td><td className="muted small">{fmtTarget(x, S.settings.unit)}</td></tr>)}</tbody></table></div>)}
           <div className="row wrap"><button className="btn primary" onClick={() => accept(false)}>Add to my plan</button>{S.plan.workouts.length > 0 && <button className="btn" onClick={() => { if (confirm("Replace the current workouts with these?")) accept(true); }}>Replace my plan</button>}</div>
         </>
       )}

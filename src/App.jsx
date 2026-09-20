@@ -4,6 +4,7 @@ import Today from "./log/Today";
 import Session from "./log/Session";
 import History from "./log/History";
 import Plan from "./log/Plan";
+import Exercise from "./log/Exercise";
 import Backup from "./log/Backup";
 import { Toaster } from "./log/ui";
 import { useLog, requestPersistence } from "./log/store";
@@ -41,13 +42,14 @@ function App() {
       {view === "session" && <Session onFinished={(id) => { setJustFinished(id); go("today"); }} onExit={() => go("today")} />}
       {view === "history" && <History />}
       {view === "plan" && <Plan params={params} go={go} />}
+      {view === "exercise" && <Exercise params={params} go={go} />}
       {/* Kept mounted: unmounting would silently cancel a running timer when
           the user glances at another tab mid-set. */}
       <div style={{ display: view === "timer" ? undefined : "none", paddingBottom: "calc(80px + var(--sab))" }}><GymTimer /></div>
       {view === "backup" && <Backup />}
       <nav className="tabs">
         {TABS.map(([id, ic, label]) => (
-          <button key={id} className={(view === id || (id === "today" && view === "session")) ? "on" : ""} onClick={() => go(id)}><span className="ic">{ic}</span>{label}</button>
+          <button key={id} className={(view === id || (id === "today" && view === "session") || (id === "plan" && view === "exercise")) ? "on" : ""} onClick={() => go(id)}><span className="ic">{ic}</span>{label}</button>
         ))}
       </nav>
       <Toaster />

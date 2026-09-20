@@ -42,6 +42,14 @@
 .field { margin: 8px 0; } .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .last { font-size: 14px; color: var(--muted); margin-top: 4px; } .last b { color: var(--fg); font-weight: 600; }
+.cue { font-size: 14px; color: var(--blue); margin-top: 4px; }
+.exlink { display: inline-block; font-size: 14px; color: var(--muted); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; padding: 2px 8px 2px 0; }
+.techbox { margin-top: 8px; } .techbox summary { font-size: 14px; color: var(--muted); cursor: pointer; padding: 4px 0; }
+.tech { font-size: 14px; color: var(--fg); }
+.tech ol, .tech ul { margin: 6px 0; padding-left: 20px; } .tech li { margin: 3px 0; }
+.tech .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim); margin-top: 8px; }
+.tech .watch li { color: var(--yellow); } .tech .watch li::marker { content: "⚠ "; }
+.tech .prog { margin-top: 8px; color: var(--green); } .tech .prog .lab { display: inline; margin-right: 4px; }
 .next { font-size: 14px; margin-top: 4px; color: var(--green); } .next.down { color: var(--yellow); } .next.repeat { color: var(--muted); }
 .target { font-size: 14px; color: var(--dim); }
 .banner { background: #2a2413; border: 1px solid #5a4a1c; color: var(--yellow); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 10px 0; }
@@ -56,6 +64,7 @@ nav.tabs button.on { color: var(--green); }
 .rest { position: fixed; left: 0; right: 0; bottom: calc(64px + var(--sab)); z-index: 40; background: #1a1a1a; border-top: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
 .rest .t { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: "JetBrains Mono", "SF Mono", monospace; min-width: 60px; }
 .rest .bar { flex: 1; height: 4px; background: #333; border-radius: 2px; overflow: hidden; } .rest .bar div { height: 100%; background: var(--green); transition: width 1s linear; }
+.rest.late .t { color: var(--red); } .rest.late .small { color: var(--red); }
 .overlay { position: fixed; inset: 0; z-index: 70; background: var(--bg); overflow: auto; }
 .overlay .close { position: fixed; top: calc(12px + var(--sat)); left: 12px; z-index: 71; }
 details summary { cursor: pointer; }

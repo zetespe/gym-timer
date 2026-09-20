@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useLog, patch, setState, getState, slug } from "./store";
-import { fmtDate, fmtEntry, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, findExercise } from "./model";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, findExercise } from "./model";
 import { Stepper, toast } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
+import Technique from "./Technique";
 import GymTimer from "../GymTimer";
 
 export default function Session({ onFinished, onExit }) {
@@ -24,9 +25,12 @@ export default function Session({ onFinished, onExit }) {
     if (!rest) return;
     if (rest.left <= 0) {
       // Announce "Go" once, even if we resumed long after the rest ended.
-      if (restPrev.current !== 0) { doubleBeep(); speak("Go"); }
+      // iOS freezes the app in the background, so the announcement can only
+      // happen on return — say HOW LATE it is, so overlong rests are visible.
+      const over = Math.max(0, Math.round((Date.now() - rest.endAt) / 1000));
+      if (restPrev.current !== 0) { doubleBeep(); speak(over > 5 ? `Go! Rest ended ${over} seconds ago` : "Go"); }
       restPrev.current = 0;
-      const t = setTimeout(() => setRest(null), 1500);
+      const t = setTimeout(() => setRest(null), over > 5 ? 4000 : 1500);
       return () => clearTimeout(t);
     }
     // Side effects stay outside the setRest updater — React may invoke
@@ -90,6 +94,7 @@ export default function Session({ onFinished, onExit }) {
     <div className="page">
       <div className="hdr"><h1>{d.name}</h1><span className="muted small">{fmtDate(d.date)} · {mins} min</span></div>
       {workout && workout.intent && <p className="muted small">{workout.intent}</p>}
+      {S.plan.loadNote && <div className="banner">{S.plan.loadNote}</div>}
       {d.exercises.map((e, ei) => {
         const px = workout ? workout.exercises.find((x) => x.id === e.exId) : null;
         const last = lastFor(S.sessions, e.exId, { excludeId: d.id });
@@ -97,14 +102,15 @@ export default function Session({ onFinished, onExit }) {
         const allDone = e.sets.length > 0 && e.sets.every((s) => s.done);
         const k = valKey(e.mode);
         const hasW = !e.bodyweight;
-        const targetText = px ? (px.target || `${px.sets}×${px.mode === "reps" ? (px.repsMin === px.repsMax ? px.repsMin : px.repsMin + "–" + px.repsMax) : px.mode === "time" ? px.secs + " s" : px.dist + " m"}${px.perSide ? " / side" : ""}${!px.bodyweight && px.weight != null ? " · " + px.weight + " " + unit : ""}`) : "";
+        const targetText = px ? (px.target ? px.target + (px.rest ? ` · rest ${px.rest} s` : "") : fmtTarget(px, unit)) : "";
         return (
           <div className={"card" + (allDone ? " done" : "")} key={ei}>
             <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>{allDone && <span className="pill ok">✓ done</span>}</div>
-            {targetText && <div className="target">{targetText}{px && px.rest ? ` · rest ${px.rest} s` : ""}</div>}
+            {targetText && <div className="target">{targetText}</div>}
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
             {sug.text && <div className={"next " + sug.kind}>{sug.text}</div>}
-            {px && (px.cue || px.progression) && <details className="small muted" style={{ marginTop: 6 }}><summary>Cues</summary>{px.cue && <p>{px.cue}</p>}{px.progression && <p>{px.progression}</p>}</details>}
+            {px && px.cue && <div className="cue">{px.cue}</div>}
+            {px && <Technique x={px} />}
             <div className="sets">
               {e.sets.map((s, si) => (
                 <div className={"set" + (hasW ? "" : " nw")} key={si}>
@@ -127,6 +133,12 @@ export default function Session({ onFinished, onExit }) {
         );
       })}
       <button className="btn" onClick={addExercise}>+ Add exercise</button>
+      {S.plan.stopRules.length > 0 && (
+        <details className="techbox" style={{ marginTop: 14 }}>
+          <summary>Stop rules</summary>
+          <div className="tech"><ul>{S.plan.stopRules.map((r, i) => <li key={i}>{r}</li>)}</ul></div>
+        </details>
+      )}
       <h2>Session notes</h2>
       <textarea rows={2} placeholder="Anything about the whole session" value={d.notes || ""} onChange={(ev) => mut((dr) => { dr.notes = ev.target.value; })} />
       <div className="quick">
@@ -141,13 +153,16 @@ export default function Session({ onFinished, onExit }) {
         <button className="btn ghost danger" onClick={() => { if (confirm("Discard this session? Nothing will be saved.")) { setState((s) => ({ ...s, draft: null })); onExit(); } }}>Discard</button>
       </div>
 
-      {rest && (
-        <div className="rest" onClick={() => setRest(null)}>
-          <div className="t">{rest.left}</div>
-          <div className="grow"><div className="small muted">Rest · {rest.name}</div><div className="bar"><div style={{ width: `${(100 * rest.left) / rest.total}%` }} /></div></div>
-          <button className="btn sm ghost">Skip</button>
-        </div>
-      )}
+      {rest && (() => {
+        const over = rest.left <= 0 ? Math.max(0, Math.round((Date.now() - rest.endAt) / 1000)) : 0;
+        return (
+          <div className={"rest" + (over > 5 ? " late" : "")} onClick={() => setRest(null)}>
+            <div className="t">{rest.left > 0 ? rest.left : "GO"}</div>
+            <div className="grow"><div className="small muted">{over > 5 ? `Rest ended ${over} s ago` : `Rest · ${rest.name}`}</div><div className="bar"><div style={{ width: `${Math.max(0, (100 * rest.left) / rest.total)}%` }} /></div></div>
+            <button className="btn sm ghost">Skip</button>
+          </div>
+        );
+      })()}
 
       {timerFor != null && d.exercises[timerFor] && (
         <div className="overlay">

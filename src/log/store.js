@@ -5,16 +5,24 @@ import { useSyncExternalStore } from "react";
 
 export const KEY = "gymtimer.log";
 const BACKUP_KEY = "gymtimer.log.premigration";
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 
 export function emptyState() {
   return {
     version: SCHEMA,
     settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4 }, lastBackupAt: null, sessionsSinceBackup: 0 },
-    plan: { name: "", workouts: [] },
+    plan: { name: "", loadNote: "", rules: [], stopRules: [], workouts: [] },
     sessions: [],
     draft: null,
   };
+}
+
+// Accepts a list of strings or one newline-separated string; always returns a
+// clean array. Imported JSON is written by AIs, so both shapes arrive.
+export function strList(v) {
+  if (v == null) return [];
+  const arr = Array.isArray(v) ? v : String(v).split(/\r?\n/);
+  return arr.map((s) => String(s).trim()).filter(Boolean);
 }
 
 export function migrate(raw) {
@@ -35,6 +43,9 @@ export function migrate(raw) {
   s.version = SCHEMA;
   s.settings = Object.assign(emptyState().settings, s.settings || {});
   s.plan = s.plan || { name: "", workouts: [] };
+  s.plan.loadNote = s.plan.loadNote || "";
+  s.plan.rules = strList(s.plan.rules);
+  s.plan.stopRules = strList(s.plan.stopRules);
   s.plan.workouts = (s.plan.workouts || []).map(migrateWorkout);
   s.sessions = (s.sessions || []).map(normalizeSession);
   return s;
@@ -70,6 +81,8 @@ export function migrateExercise(x) {
     target: x.target || "",
     cue: x.cue || "",
     progression: x.progression || "",
+    steps: strList(x.steps),
+    watchFor: strList(x.watchFor ?? x.watchfor ?? x.faults),
   };
 }
 

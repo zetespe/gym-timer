@@ -1,6 +1,6 @@
 // Pure helpers over the log state: formatting, history lookups, the next-weight
 // rule, the quick-log parser, plan-text parser and export/import.
-import { normalizeSession, migrateWorkout, slug, uid, today } from "./store";
+import { normalizeSession, migrateWorkout, slug, uid, today, strList, emptyState } from "./store";
 
 export const valKey = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "r");
 export const valUnit = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "reps");
@@ -23,6 +23,17 @@ export function fmtEntry(e, unit = "kg") {
   if (ws.length > 1) out = sets.map((s) => (s.w != null ? s.w + " " + unit + " × " : "") + (setVal(s, e.mode) ?? "·") + suffix).join(", ");
   else out = (ws.length === 1 && !(e.bodyweight && ws[0] === 0) ? ws[0] + " " + unit + " × " : "") + vals.join(", ") + suffix;
   if (e.perSide) out += " / side";
+  return out;
+}
+
+// One shared "3×8–10 / side · 16 kg · rest 90 s" formatter for a plan
+// exercise; every screen that shows a target uses this.
+export function fmtTarget(x, unit) {
+  const val = x.mode === "reps" ? (x.repsMin === x.repsMax ? x.repsMin : x.repsMin + "–" + x.repsMax) : x.mode === "time" ? x.secs + " s" : x.dist + " m";
+  let out = `${x.sets}×${val}${x.perSide ? " / side" : ""}`;
+  if (x.bodyweight) out += " · bodyweight";
+  else if (x.weight != null) out += ` · ${x.weight} ${unit}`;
+  if (x.rest) out += ` · rest ${x.rest} s`;
   return out;
 }
 
@@ -220,10 +231,32 @@ export function exportObject(state, { full = true } = {}) {
 
 export function applyImport(state, obj) {
   const next = structuredClone(state);
+  // The base state may predate the current schema (e.g. a restore built from
+  // an old backup); make sure every plan field exists before touching it.
+  next.plan = Object.assign(structuredClone(emptyState().plan), next.plan);
+  next.plan.rules = strList(next.plan.rules);
+  next.plan.stopRules = strList(next.plan.stopRules);
   const report = [];
-  if (obj.plan && (obj.plan.workouts || obj.plan.sessions)) {
-    next.plan = { name: obj.plan.name || "", workouts: (obj.plan.workouts || obj.plan.sessions).map(migrateWorkout) };
-    report.push("plan replaced");
+  if (obj.plan) {
+    const p = obj.plan;
+    if (p.workouts || p.sessions) {
+      // A full plan replacement replaces ALL of it: omitted name, load note
+      // and rules reset rather than silently surviving from the old plan.
+      next.plan = {
+        name: p.name || "",
+        loadNote: p.loadNote != null ? String(p.loadNote) : "",
+        rules: strList(p.rules),
+        stopRules: strList(p.stopRules),
+        workouts: (p.workouts || p.sessions).map(migrateWorkout),
+      };
+      report.push("plan replaced");
+    } else {
+      if (p.name != null) { next.plan.name = p.name; report.push("plan renamed"); }
+      if (p.loadNote != null) next.plan.loadNote = String(p.loadNote);
+      if (p.rules != null) next.plan.rules = strList(p.rules);
+      if (p.stopRules != null) next.plan.stopRules = strList(p.stopRules);
+      if (p.loadNote != null || p.rules != null || p.stopRules != null) report.push("training rules updated");
+    }
   }
   if (Array.isArray(obj.workouts)) {
     for (const w of obj.workouts) next.plan.workouts.push(migrateWorkout(w));
@@ -269,12 +302,24 @@ export function extractJSON(text) {
   throw new Error("No JSON found.");
 }
 
-export function claudePrompt(state) {
+// Works with any AI assistant (Claude, ChatGPT, Gemini, …): the user pastes
+// this prompt plus their plan or session description, and pastes the AI's
+// JSON reply back into the app.
+export function aiPrompt(state) {
   const ex = allExercises(state).map((x) => `${x.id} (${x.name}, ${x.mode}${x.perSide ? ", per side" : ""}${x.bodyweight ? ", bodyweight" : ""})`).join("; ");
-  return `I log gym sessions in a small offline app called Gymmy. I'll describe a session in words; reply with ONE JSON block I can paste into the app, then a one-line summary. Format:
+  return `You are helping me manage my training in Gymmy, a small offline workout app. I will describe a session I did, or paste a training plan (any format: tables, bullet points, a coach's document). Reply with exactly ONE JSON block I can paste into the app, then a one-line summary. Do not wrap the JSON in extra prose containing braces.
+
+To log SESSIONS:
 {"type":"gym-import","sessions":[{"id":"YYYY-MM-DD-x","date":"YYYY-MM-DD","workoutId":"<id or free>","name":"Workout name","notes":"","exercises":[{"exId":"goblet_squat","name":"Goblet Squat","mode":"reps","sets":[{"w":16,"r":8},{"w":16,"r":8}],"notes":""}]}]}
-Set fields: w = weight ${state.settings.unit} (omit for bodyweight), r = reps, s = seconds (mode "time"), m = metres (mode "dist"). One object per set.
-To change the plan instead, reply with {"type":"gym-import","plan":{"name":"...","workouts":[{"id":"a","name":"Workout A","exercises":[{"id":"goblet_squat","name":"Goblet Squat","mode":"reps","sets":3,"repsMin":8,"repsMax":10,"weight":16,"increment":1,"rest":90,"perSide":false,"bodyweight":false,"cue":""}]}]}}
+Set fields: w = weight in ${state.settings.unit} (omit for bodyweight), r = reps (mode "reps"), s = seconds (mode "time"), m = metres (mode "dist"). One object per set.
+
+To set or update the PLAN:
+{"type":"gym-import","plan":{"name":"...","loadNote":"...","rules":["..."],"stopRules":["..."],"workouts":[{"id":"a","name":"Workout A","subtitle":"","intent":"one line on what this workout is for","exercises":[{"id":"goblet_squat","name":"Goblet Squat","mode":"reps","sets":3,"repsMin":8,"repsMax":10,"weight":16,"increment":1,"rest":90,"perSide":false,"bodyweight":false,"cue":"one short mid-set reminder","steps":["how to do it, one step per entry"],"watchFor":["common faults, one per entry"],"progression":"when and how to make it harder"}]}}}
+- Include technique: put the setup/execution steps in "steps", the typical mistakes in "watchFor", the single most important reminder in "cue" (short — it shows during the workout), and the progression rule in "progression".
+- Plan-level: "loadNote" = a temporary caution shown at the start of every session (e.g. reduced load after a break); "rules" = the plan's progression rules; "stopRules" = when to stop or regress.
+- "plan" REPLACES all workouts. To append instead, use {"type":"gym-import","workouts":[...]}. Sending "plan" with only loadNote/rules/stopRules (no workouts) updates just those.
+- mode "time" uses "secs", mode "dist" uses "dist" (metres) instead of repsMin/repsMax.
+
 Known exercises: ${ex || "none yet"}.
 Workouts: ${state.plan.workouts.map((w) => w.id + " = " + w.name + " (" + w.exercises.map((x) => x.name).join(", ") + ")").join("; ") || "none yet"}.`;
 }

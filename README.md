@@ -13,8 +13,8 @@ Gymmy is a gym PWA (repo `gym-timer`) that works fully offline after first load:
   lock, pocket mode. Timed exercises in a session open it preset and write the
   result back.
 
-Talking to Claude (dictating a session, asking for a plan, analysis) works by
-copy/paste from the Backup tab; the format is in `docs/CLAUDE-PROTOCOL.md`.
+Talking to an AI assistant (dictating a session, asking for a plan, analysis) works by
+copy/paste from the Backup tab; the format is in `docs/AI-PROTOCOL.md`.
 
 **Live app:** https://zetespe.github.io/gym-timer/
 
