@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText } from "./model";
 
 const entries = [
   { exId: "goblet_squat", name: "Goblet Squat", mode: "reps", bodyweight: false },
@@ -45,6 +45,30 @@ describe("parseQuickLog", () => {
   it("keeps a trailing note", () => {
     const r = parseQuickLog("goblet 16 8 8 7 felt easy", entries);
     expect(r.note).toBe("Felt easy");
+  });
+});
+
+describe("parsePlanText", () => {
+  it("parses exercise lines with ranges, weight and rest", () => {
+    const [w] = parsePlanText("# Workout A\nGoblet Squat 3x8-10 16kg rest 90\nDead Hang 3 x 30s");
+    expect(w.name).toBe("Workout A");
+    expect(w.exercises).toHaveLength(2);
+    expect(w.exercises[0]).toMatchObject({ name: "Goblet Squat", mode: "reps", sets: 3, repsMin: 8, repsMax: 10, weight: 16, rest: 90 });
+    expect(w.exercises[1]).toMatchObject({ name: "Dead Hang", mode: "time", secs: 30, bodyweight: true });
+  });
+
+  it("turns prose lines into the workout description, not junk exercises", () => {
+    const [w] = parsePlanText("# Workout A\nFocus on slow eccentrics this block.\nGoblet Squat 3x8 16kg\nWarm up 5 min before starting");
+    expect(w.exercises).toHaveLength(1);
+    expect(w.exercises[0].name).toBe("Goblet Squat");
+    expect(w.intent).toContain("Focus on slow eccentrics");
+    expect(w.intent).toContain("Warm up 5 min");
+  });
+
+  it("keeps a bare short name as an exercise", () => {
+    const [w] = parsePlanText("# Workout A\nPush-ups");
+    expect(w.exercises).toHaveLength(1);
+    expect(w.exercises[0].name).toBe("Push-ups");
   });
 });
 

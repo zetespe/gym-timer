@@ -176,7 +176,16 @@ export function parsePlanText(text) {
     const head = line.match(/^#+\s*(.+)$/) || (line.endsWith(":") && !/\d/.test(line) ? [null, line.slice(0, -1)] : null);
     if (head) { cur = { id: uid(), name: head[1].trim(), subtitle: "", exercises: [] }; workouts.push(cur); continue; }
     const m = line.match(/^(.+?)\s+(\d+)\s*[x×]\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*(s|sec|secs|m|min|reps?)?\b(.*)$/i);
-    if (!m) { if (!cur) { cur = { id: uid(), name: "Workout", subtitle: "", exercises: [] }; workouts.push(cur); } cur.exercises.push(migrateWorkout({ exercises: [{ name: line }] }).exercises[0]); continue; }
+    if (!m) {
+      // A short digit-free line ("Push-ups") is an exercise without a set
+      // scheme; anything sentence-like is coach's prose and becomes the
+      // workout description instead of a junk exercise.
+      const nameLike = !/\d/.test(line) && !/[.,!?;:]/.test(line) && line.split(/\s+/).length <= 4;
+      if (!nameLike) { if (cur) cur.intent = (cur.intent ? cur.intent + " " : "") + line; continue; }
+      if (!cur) { cur = { id: uid(), name: "Workout", subtitle: "", exercises: [] }; workouts.push(cur); }
+      cur.exercises.push(migrateWorkout({ exercises: [{ name: line }] }).exercises[0]);
+      continue;
+    }
     if (!cur) { cur = { id: uid(), name: "Workout", subtitle: "", exercises: [] }; workouts.push(cur); }
     const [, name, sets, a, b, u, rest] = m;
     const tail = rest.toLowerCase();
