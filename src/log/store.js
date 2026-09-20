@@ -142,10 +142,24 @@ export function getState() {
   return state;
 }
 
+// Persisting serialises the whole state, and note fields call setState per
+// keystroke — so writes are batched (~300ms) and flushed when the page hides,
+// which is the last reliable moment before a mobile browser kills the tab.
+let saveTimer = null;
+function persist() {
+  saveTimer = null;
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn("log: could not save", e); }
+}
+function flush() { if (saveTimer != null) { clearTimeout(saveTimer); persist(); } }
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+}
+
 export function setState(updater) {
   const next = typeof updater === "function" ? updater(getState()) : updater;
   state = next;
-  try { localStorage.setItem(KEY, JSON.stringify(next)); } catch (e) { console.warn("log: could not save", e); }
+  if (saveTimer == null) saveTimer = setTimeout(persist, 300);
   listeners.forEach((l) => l());
 }
 
