@@ -228,10 +228,26 @@ export function applyImport(state, obj) {
   return { state: next, report: report.join("; ") };
 }
 
+// Find the first complete JSON object in free text (prose before or after is
+// ignored, including prose containing braces). Walks from each '{' with a
+// depth counter that skips string literals; parses the first balanced block
+// that is valid JSON.
 export function extractJSON(text) {
-  const m = String(text).match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("No JSON found.");
-  return JSON.parse(m[0]);
+  const s = String(text);
+  for (let start = s.indexOf("{"); start !== -1; start = s.indexOf("{", start + 1)) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < s.length; i++) {
+      const c = s[i];
+      if (esc) { esc = false; continue; }
+      if (inStr) { if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) {
+        try { return JSON.parse(s.slice(start, i + 1)); } catch (e) { break; }
+      }
+    }
+  }
+  throw new Error("No JSON found.");
 }
 
 export function claudePrompt(state) {
