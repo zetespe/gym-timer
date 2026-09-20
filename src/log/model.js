@@ -152,8 +152,12 @@ export function parseQuickLog(text, entries, unit = "kg") {
   const k = valKey(ex.mode);
   let vals = nums.slice();
   const hasWeight = !ex.bodyweight;
-  if (weight == null && hasWeight && vals.length > 1) weight = vals.shift();
-  if (sets && reps) vals = Array(sets).fill(reps);
+  if (sets && reps) {
+    // "goblet 16 3x8": the NxM part is already stripped, so a leftover
+    // leading number is the weight even when it is the only one.
+    if (weight == null && hasWeight && vals.length) weight = vals[0];
+    vals = Array(sets).fill(reps);
+  } else if (weight == null && hasWeight && vals.length > 1) weight = vals.shift();
   if (!vals.length && weight == null && !note) return { error: "No numbers found." };
   return { ex, weight, vals, k, note: note ? note.charAt(0).toUpperCase() + note.slice(1) : "", unit };
 }
