@@ -8,10 +8,11 @@ import GymTimer from "../GymTimer";
 export default function Session({ onFinished, onExit }) {
   const S = useLog();
   const d = S.draft;
-  const [rest, setRest] = useState(null); // { total, left, name }
+  const [rest, setRest] = useState(null); // { total, endAt, left, name }
   const [timerFor, setTimerFor] = useState(null); // exercise index
   const [now, setNow] = useState(() => Date.now());
   const wakeRef = useRef(null);
+  const restPrev = useRef(null); // previous `left`, to fire each cue beep once
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
   // keep the screen on for the whole session where supported
@@ -23,12 +24,31 @@ export default function Session({ onFinished, onExit }) {
     document.addEventListener("visibilitychange", vis);
     return () => { active = false; document.removeEventListener("visibilitychange", vis); try { if (wakeRef.current) wakeRef.current.release(); } catch (e) {} };
   }, []);
-  // rest countdown
+  // Rest countdown. `left` is always derived from the wall clock (endAt), not
+  // from tick counting: browsers throttle or suspend timers when the app is
+  // backgrounded, so on return the remaining time must still be correct.
   useEffect(() => {
     if (!rest) return;
-    if (rest.left <= 0) { doubleBeep(); speak("Go"); const t = setTimeout(() => setRest(null), 1500); return () => clearTimeout(t); }
-    const t = setTimeout(() => { if (rest.left <= 4 && rest.left > 1) beep(660, 80, 0.3); setRest((r) => (r ? { ...r, left: r.left - 1 } : r)); }, 1000);
-    return () => clearTimeout(t);
+    if (rest.left <= 0) {
+      // Announce "Go" once, even if we resumed long after the rest ended.
+      if (restPrev.current !== 0) { doubleBeep(); speak("Go"); }
+      restPrev.current = 0;
+      const t = setTimeout(() => setRest(null), 1500);
+      return () => clearTimeout(t);
+    }
+    const sync = () => setRest((r) => {
+      if (!r) return r;
+      const left = Math.max(0, Math.ceil((r.endAt - Date.now()) / 1000));
+      if (left === r.left) return r;
+      // Cue beeps only on single-step transitions — skipped seconds after a
+      // background resume stay silent.
+      if (left <= 4 && left > 1 && restPrev.current === left + 1) beep(660, 80, 0.3);
+      if (left > 0) restPrev.current = left; // 0 is recorded by the finish branch, after it announces "Go"
+      return { ...r, left };
+    });
+    const t = setInterval(sync, 250);
+    document.addEventListener("visibilitychange", sync);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", sync); };
   }, [rest]);
 
   if (!d) return null;
@@ -37,7 +57,7 @@ export default function Session({ onFinished, onExit }) {
   const mins = Math.max(0, Math.round((now - new Date(d.startedAt)) / 60000));
 
   const mut = (fn) => patch((s) => { fn(s.draft); });
-  const startRest = (e) => { if (S.settings.restTimer && e.rest > 0) setRest({ total: e.rest, left: e.rest, name: e.name }); };
+  const startRest = (e) => { if (S.settings.restTimer && e.rest > 0) { restPrev.current = e.rest; setRest({ total: e.rest, endAt: Date.now() + e.rest * 1000, left: e.rest, name: e.name }); } };
   const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { dr.exercises[ei].sets[si].done = !was; }); if (!was) startRest(d.exercises[ei]); };
 
   const onQuick = (text) => {
