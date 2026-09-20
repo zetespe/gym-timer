@@ -24,11 +24,15 @@ function App() {
   const [justFinished, setJustFinished] = useState(null);
   useEffect(() => { requestPersistence(); }, []);
   useEffect(() => {
-    const onHash = () => setTab(location.hash.slice(1) || "today");
+    // Strip "?params" the same way the initial-state read does, and drop any
+    // stale params from a previous in-app navigation.
+    const onHash = () => { setParams(null); setTab(location.hash.slice(1).split("?")[0] || "today"); };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  const go = (t, p = null) => { setParams(p); setTab(t); if (location.hash !== "#" + t) history.replaceState(null, "", "#" + t); window.scrollTo(0, 0); };
+  // Leaving Today dismisses the post-workout "Saved" card; the finish redirect
+  // itself goes TO today, so it survives exactly until the next tab switch.
+  const go = (t, p = null) => { setParams(p); setTab(t); if (t !== "today") setJustFinished(null); if (location.hash !== "#" + t) history.replaceState(null, "", "#" + t); window.scrollTo(0, 0); };
   const view = tab === "session" && !S.draft ? "today" : tab;
 
   return (

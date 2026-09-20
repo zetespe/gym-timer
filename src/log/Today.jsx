@@ -1,4 +1,4 @@
-import { useLog, setState } from "./store";
+import { useLog, setState, today } from "./store";
 import { fmtDate, fmtEntry, sortedSessions, startDraft, summaryText } from "./model";
 import { copyText } from "./ui";
 
@@ -7,7 +7,8 @@ export default function Today({ go, justFinished }) {
   const unit = S.settings.unit;
   const d = S.draft;
   const start = (w) => { setState((s) => ({ ...s, draft: startDraft(s, w) })); go("session"); };
-  const finished = justFinished ? S.sessions.find((s) => s.id === justFinished) : null;
+  // A PWA can stay alive for days; only today's finish deserves the card.
+  const finished = justFinished ? S.sessions.find((s) => s.id === justFinished && s.date === today()) : null;
   const recent = sortedSessions(S.sessions).slice(0, 5);
   const needBackup = (S.settings.sessionsSinceBackup || 0) >= 3;
 
