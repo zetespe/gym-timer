@@ -161,7 +161,9 @@ export default function Session({ onFinished, onExit }) {
           <GymTimer
             preset={{ hold: d.exercises[timerFor].sets[0]?.s || 20, swap: d.exercises[timerFor].perSide ? S.settings.timer.swap : 4 }}
             onResult={({ reps, hold }) => {
-              if (reps > 0) mut((dr) => { const ex = dr.exercises[timerFor]; ex.sets = Array.from({ length: reps }, () => ({ done: true, s: hold })); });
+              // Carry the entered weight over set by set — a weighted hold
+              // (e.g. weighted dead hang) must not come back as bodyweight.
+              if (reps > 0) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; ex.sets = Array.from({ length: reps }, (_, i) => { const o = { done: true, s: hold }; const w = old[i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; }); });
               setTimerFor(null);
               if (reps > 0) toast(`${reps} × ${hold} s recorded for ${d.exercises[timerFor].name}`);
             }}
