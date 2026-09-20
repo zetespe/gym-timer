@@ -29,16 +29,17 @@ export default function Session({ onFinished, onExit }) {
       const t = setTimeout(() => setRest(null), 1500);
       return () => clearTimeout(t);
     }
-    const sync = () => setRest((r) => {
-      if (!r) return r;
-      const left = Math.max(0, Math.ceil((r.endAt - Date.now()) / 1000));
-      if (left === r.left) return r;
+    // Side effects stay outside the setRest updater — React may invoke
+    // updaters more than once (StrictMode does), which would double the beeps.
+    const sync = () => {
+      const left = Math.max(0, Math.ceil((rest.endAt - Date.now()) / 1000));
+      if (left === rest.left) return;
       // Cue beeps only on single-step transitions — skipped seconds after a
       // background resume stay silent.
       if (left <= 4 && left > 1 && restPrev.current === left + 1) beep(660, 80, 0.3);
       if (left > 0) restPrev.current = left; // 0 is recorded by the finish branch, after it announces "Go"
-      return { ...r, left };
-    });
+      setRest((r) => (r ? { ...r, left } : r));
+    };
     const t = setInterval(sync, 250);
     document.addEventListener("visibilitychange", sync);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", sync); };
@@ -154,9 +155,11 @@ export default function Session({ onFinished, onExit }) {
           <GymTimer
             preset={{ hold: d.exercises[timerFor].sets[0]?.s || 20, swap: d.exercises[timerFor].perSide ? S.settings.timer.swap : 4 }}
             onResult={({ reps, hold }) => {
-              // Carry the entered weight over set by set — a weighted hold
-              // (e.g. weighted dead hang) must not come back as bodyweight.
-              if (reps > 0) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; ex.sets = Array.from({ length: reps }, (_, i) => { const o = { done: true, s: hold }; const w = old[i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; }); });
+              // Sets already ticked (earlier timer runs, manual logging) are
+              // kept and the new holds appended after them; only untouched
+              // prefilled sets are replaced. Weight carries over set by set —
+              // a weighted hold must not come back as bodyweight.
+              if (reps > 0) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; const kept = old.filter((s) => s.done); ex.sets = [...kept, ...Array.from({ length: reps }, (_, i) => { const o = { done: true, s: hold }; const w = old[kept.length + i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; })]; });
               setTimerFor(null);
               if (reps > 0) toast(`${reps} × ${hold} s recorded for ${d.exercises[timerFor].name}`);
             }}

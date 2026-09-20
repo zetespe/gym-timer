@@ -54,7 +54,8 @@ export default function Backup() {
   const doRestore = (obj, mode) => {
     setPending(null);
     try {
-      const base = mode === "replace" ? { ...S, plan: { name: "", workouts: [] }, sessions: [] } : S;
+      // Replace also drops an in-progress draft: it references the wiped plan.
+      const base = mode === "replace" ? { ...S, plan: { name: "", workouts: [] }, sessions: [], draft: null } : S;
       const r = applyImport(base, obj);
       setState(r.state); toast("Restored: " + r.report, 4000);
     } catch (e) { toast("Restore failed: " + e.message, 4000); }

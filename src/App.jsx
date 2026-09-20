@@ -41,7 +41,9 @@ function App() {
       {view === "session" && <Session onFinished={(id) => { setJustFinished(id); go("today"); }} onExit={() => go("today")} />}
       {view === "history" && <History />}
       {view === "plan" && <Plan params={params} go={go} />}
-      {view === "timer" && <div style={{ paddingBottom: "calc(80px + var(--sab))" }}><GymTimer /></div>}
+      {/* Kept mounted: unmounting would silently cancel a running timer when
+          the user glances at another tab mid-set. */}
+      <div style={{ display: view === "timer" ? undefined : "none", paddingBottom: "calc(80px + var(--sab))" }}><GymTimer /></div>
       {view === "backup" && <Backup />}
       <nav className="tabs">
         {TABS.map(([id, ic, label]) => (

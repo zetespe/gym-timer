@@ -192,12 +192,15 @@ export function parsePlanText(text) {
     const wm = tail.match(/(\d+(?:[.,]\d+)?)\s*(kg|lb|lbs)/);
     const rm = tail.match(/rest\s*(\d+)\s*(s|sec|min|m)?/);
     const unitL = (u || "").toLowerCase();
-    const mode = unitL.startsWith("s") ? "time" : unitL === "m" ? "dist" : "reps";
+    // "min" is time in minutes; a bare "m" is metres.
+    const mode = unitL.startsWith("s") || unitL === "min" ? "time" : unitL === "m" ? "dist" : "reps";
     const x = { id: slug(name), name: name.trim(), mode, sets: +sets, perSide: /per side|each side|\/ ?side/.test(tail), bodyweight: !wm && /bodyweight|bw\b/.test(tail) || (!wm && mode !== "reps" ? true : false) };
-    if (mode === "reps") { x.repsMin = +a; x.repsMax = b ? +b : +a; } else if (mode === "time") x.secs = +a; else x.dist = +a;
+    if (mode === "reps") { x.repsMin = +a; x.repsMax = b ? +b : +a; } else if (mode === "time") x.secs = unitL === "min" ? +a * 60 : +a; else x.dist = +a;
     if (wm) x.weight = num(wm[1]); else if (!x.bodyweight) x.weight = 0;
     if (rm) x.rest = rm[2] && rm[2].startsWith("m") ? +rm[1] * 60 : +rm[1];
-    if (!wm && mode === "reps" && /bodyweight|bw\b|push|pull|plank|hang|dip|chin/.test((name + tail).toLowerCase())) x.bodyweight = true;
+    // Whole-exercise names only: a bare "push"/"pull"/"chin" also matches Lat
+    // Pulldown, Cable Push-down or Machine Row, which do take stack weight.
+    if (!wm && mode === "reps" && /bodyweight|\bbw\b|push.?ups?|pull.?ups?|chin.?ups?|plank|hang|\bdips?\b/.test((name + tail).toLowerCase())) x.bodyweight = true;
     cur.exercises.push(migrateWorkout({ exercises: [x] }).exercises[0]);
   }
   return workouts.filter((w) => w.exercises.length);
@@ -256,7 +259,10 @@ export function extractJSON(text) {
       if (c === '"') inStr = true;
       else if (c === "{") depth++;
       else if (c === "}" && --depth === 0) {
-        try { return JSON.parse(s.slice(start, i + 1)); } catch (e) { break; }
+        // A trivial brace expression in surrounding prose ('use {} if empty')
+        // must not hijack the import — only a non-empty object counts.
+        try { const v = JSON.parse(s.slice(start, i + 1)); if (v && typeof v === "object" && Object.keys(v).length) return v; } catch (e) { /* keep scanning */ }
+        break;
       }
     }
   }

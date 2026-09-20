@@ -65,6 +65,16 @@ describe("parsePlanText", () => {
     expect(w.intent).toContain("Warm up 5 min");
   });
 
+  it("reads Nx1min as a timed exercise in seconds", () => {
+    const [w] = parsePlanText("# A\nPlank 3x1min");
+    expect(w.exercises[0]).toMatchObject({ mode: "time", secs: 60 });
+  });
+
+  it("marks push-ups bodyweight but not lat pulldowns or cable push-downs", () => {
+    const [w] = parsePlanText("# A\nPush-up 3x8\nLat Pulldown 3x8-10\nCable Push-down 3x12");
+    expect(w.exercises.map((x) => !!x.bodyweight)).toEqual([true, false, false]);
+  });
+
   it("keeps a bare short name as an exercise", () => {
     const [w] = parsePlanText("# Workout A\nPush-ups");
     expect(w.exercises).toHaveLength(1);
@@ -99,6 +109,10 @@ describe("extractJSON", () => {
 
   it("skips a stray brace and finds the real object", () => {
     expect(extractJSON("weird { fragment\n" + json)).toEqual(obj);
+  });
+
+  it("is not hijacked by a trivial {} in leading prose", () => {
+    expect(extractJSON('Set "notes": {} if empty, then paste:\n' + json)).toEqual(obj);
   });
 
   it("throws when there is no JSON", () => {
