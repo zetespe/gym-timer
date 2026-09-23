@@ -14,8 +14,10 @@ const DEFAULTS = { hold: 20, swap: 4, rest: 0, perSet: 2 };
 // REST between sets when a rest time is set. With rest = 0 the timer alternates
 // hold/swap forever, as it always did.
 // `preset` = { hold, swap, rest, perSet, sets } overrides the saved settings (used
-// when opened from a timed exercise); `onResult({ holds, sets, hold, perSet })`
-// is called on STOP or when the preset number of sets is complete.
+// when opened from a timed exercise); `onResult({ holds, sets, hold, perSet, partial })`
+// is called on STOP or when the preset number of sets is complete. `sets` counts
+// only fully completed sets; `partial` is the length in seconds of one extra,
+// incomplete set to log (0 when there is none).
 export default function GymTimer({ preset, onResult } = {}) {
   const saved = Object.assign({}, DEFAULTS, getState().settings.timer || {});
   const [holdTime, setHoldTimeRaw] = useState(preset?.hold ?? saved.hold);
@@ -147,12 +149,20 @@ export default function GymTimer({ preset, onResult } = {}) {
     const holds = stoppedMidHold ? Math.max(0, repRef.current - 1) : repRef.current;
     // Stopping during a hold (e.g. a dead hang to failure) reports how long that
     // hold lasted, so the real number gets logged instead of nothing.
-    const partial = stoppedMidHold ? Math.max(0, holdTime - timeRef.current) : 0;
+    const elapsed = stoppedMidHold ? Math.max(0, holdTime - timeRef.current) : 0;
+    const per = usesSets ? Math.max(1, perSet) : 1;
+    const fullSets = Math.floor(holds / per);
+    const sidesDone = holds % per; // holds already finished in the unfinished set
+    // One hold per set: an early stop is a set of its own, as long as it was.
+    // Several holds per set (left/right): the unfinished set counts only when it
+    // was stopped during its last hold, and is logged at that shorter length.
+    // Stopping on an earlier side, or in the switch, drops the unfinished set.
+    const partial = per === 1 ? elapsed : sidesDone === per - 1 ? elapsed : 0;
     phaseRef.current = PHASE_IDLE;
     setPhase(PHASE_IDLE);
     speak("Done!");
     doubleBeep();
-    if (onResult) onResult({ holds, sets: Math.ceil(holds / Math.max(1, usesSets ? perSet : 1)), hold: holdTime, perSet: usesSets ? perSet : 1, partial: partial >= 3 ? partial : 0 });
+    if (onResult) onResult({ holds, sets: fullSets, hold: holdTime, perSet: per, partial: partial >= 3 ? partial : 0 });
   }, [cleanup, onResult, holdTime, usesSets, perSet]);
   useEffect(() => { finishRef.current = handleStop; }, [handleStop]);
 
