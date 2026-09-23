@@ -57,7 +57,10 @@ export default function GymTimer({ preset, onResult } = {}) {
 
   useEffect(() => () => cleanup(), [cleanup]);
 
-  const usesSets = restTime > 0;
+  // Set mode: a rest between sets, or a preset number of sets (opened from a
+  // session). A preset with rest 0 runs the sets back to back, a short swap
+  // between them, and still stops after the last set.
+  const usesSets = restTime > 0 || targetSets > 0;
 
   const startHoldPhase = useCallback(() => {
     const newRep = repRef.current + 1;
@@ -115,7 +118,8 @@ export default function GymTimer({ preset, onResult } = {}) {
       if (phaseRef.current === PHASE_HOLD) {
         if (usesSets && holdInSetRef.current >= perSet) {
           if (targetSets && setRef.current >= targetSets) { finishRef.current(true); return; }
-          startRestPhase();
+          if (restTime > 0) startRestPhase();
+          else { holdInSetRef.current = 0; startSwapPhase(); }
         } else {
           startSwapPhase();
         }
@@ -377,10 +381,10 @@ export default function GymTimer({ preset, onResult } = {}) {
             onChange={setRestTime}
             min={0}
             max={300}
-            step={15}
+            step={5}
             color="#64A8FF"
           />
-          {restTime > 0 && (
+          {usesSets && (
             <SettingControl
               label="HOLDS / SET"
               unit=""
@@ -486,7 +490,38 @@ export default function GymTimer({ preset, onResult } = {}) {
   );
 }
 
+// +/- buttons: a tap moves one step; holding a button repeats, so long ranges
+// (REST up to 300 s in 5 s steps) don't need dozens of taps.
+function useRepeatPress(fn) {
+  const fnRef = useRef(fn);
+  useEffect(() => { fnRef.current = fn; });
+  const timers = useRef({ delay: null, repeat: null, repeated: false });
+  const stop = () => { clearTimeout(timers.current.delay); clearInterval(timers.current.repeat); };
+  useEffect(() => stop, []);
+  return {
+    onPointerDown: () => {
+      stop();
+      timers.current.repeated = false;
+      timers.current.delay = setTimeout(() => {
+        timers.current.repeated = true;
+        fnRef.current();
+        timers.current.repeat = setInterval(() => fnRef.current(), 90);
+      }, 400);
+    },
+    onPointerUp: stop,
+    onPointerLeave: stop,
+    onPointerCancel: stop,
+    onContextMenu: (e) => e.preventDefault(),
+    // A long press already stepped; swallow the click that follows it.
+    onClick: () => { if (timers.current.repeated) { timers.current.repeated = false; return; } fnRef.current(); },
+  };
+}
+
 function SettingControl({ label, unit, value, onChange, min, max, step, color }) {
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
+  const down = useRepeatPress(() => { const v = Math.max(min, valueRef.current - step); valueRef.current = v; onChange(v); });
+  const up = useRepeatPress(() => { const v = Math.min(max, valueRef.current + step); valueRef.current = v; onChange(v); });
   return (
     <div style={{ textAlign: "center" }}>
       <div
@@ -500,20 +535,14 @@ function SettingControl({ label, unit, value, onChange, min, max, step, color })
         {label}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <button
-          onClick={() => onChange(Math.max(min, value - step))}
-          style={smallBtnStyle}
-        >
+        <button {...down} style={smallBtnStyle}>
           −
         </button>
         <div>
           <span style={{ fontSize: "28px", fontWeight: 700, color: "#FFF" }}>{value}</span>
           <span style={{ fontSize: "11px", color: "#666", marginLeft: "4px" }}>{unit}</span>
         </div>
-        <button
-          onClick={() => onChange(Math.min(max, value + step))}
-          style={smallBtnStyle}
-        >
+        <button {...up} style={smallBtnStyle}>
           +
         </button>
       </div>
@@ -550,4 +579,6 @@ const smallBtnStyle = {
   alignItems: "center",
   justifyContent: "center",
   lineHeight: 1,
+  touchAction: "manipulation",
+  WebkitTouchCallout: "none",
 };

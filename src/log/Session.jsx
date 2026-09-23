@@ -172,7 +172,7 @@ export default function Session({ onFinished, onExit }) {
             preset={{
               hold: d.exercises[timerFor].sets[0]?.s || 20,
               swap: (S.settings.timer && S.settings.timer.swap) || 4,
-              rest: d.exercises[timerFor].rest || 90,
+              rest: d.exercises[timerFor].rest ?? 90, // 0 = sets back to back (e.g. a superset)
               perSet: d.exercises[timerFor].perSide ? 2 : 1,
               // Run only the sets not ticked yet; the timer stops by itself after the last one.
               sets: d.exercises[timerFor].sets.filter((s) => !s.done).length || d.exercises[timerFor].sets.length || 3,

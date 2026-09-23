@@ -205,7 +205,7 @@ describe("suggest and prefill follow the planned set count", () => {
   it("3×8 of a planned 4×6–8 asks for the 4th set, not a 9th rep", () => {
     const s = suggest(withHist([rowEntry([8, 8, 8])]), row);
     expect(s.kind).toBe("repeat");
-    expect(s.text).toBe("Repeat 8s, add the 4th set");
+    expect(s.text).toBe("Repeat 8 reps, add the 4th set");
   });
 
   it("4×8 at the top of the range uses the plan's progression for bodyweight", () => {
@@ -224,7 +224,7 @@ describe("suggest and prefill follow the planned set count", () => {
   });
 
   it("two or more missing sets say how many to build to", () => {
-    expect(suggest(withHist([rowEntry([8, 8])]), row).text).toBe("Repeat 8s, build to 4 sets");
+    expect(suggest(withHist([rowEntry([8, 8])]), row).text).toBe("Repeat 8 reps, build to 4 sets");
   });
 
   it("prefills the planned number of rows, reusing last time's numbers", () => {
