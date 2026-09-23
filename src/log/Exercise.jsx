@@ -36,8 +36,7 @@ export default function Exercise({ params, go }) {
       <div className="hdr"><h1>{name}</h1>{px && <span className="muted small">{wname}</span>}</div>
       {target && <div className="target" style={{ marginTop: 2 }}>{target}</div>}
       {px && px.cue && <div className="cue">{px.cue}</div>}
-      {sug.text && <div className={"next " + sug.kind}>{sug.text}</div>}
-      {px && <Technique x={px} open />}
+      {px && <Technique x={px} sug={sug} open />}
       <h2>History</h2>
       {!hist.length && <p className="muted">No sessions logged yet.</p>}
       {hist.map((h, i) => (

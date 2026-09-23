@@ -110,9 +110,8 @@ export default function Session({ onFinished, onExit }) {
             <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>{allDone && <span className="pill ok">✓ done</span>}</div>
             {targetText && <div className="target">{targetText}</div>}
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
-            {sug.text && <div className={"next " + sug.kind}>{sug.text}</div>}
             {px && px.cue && <div className="cue">{px.cue}</div>}
-            {px && <Technique x={px} />}
+            {px && <Technique x={px} sug={sug} />}
             <div className="sets">
               {e.sets.map((s, si) => (
                 <div className={"set" + (hasW ? "" : " nw")} key={si}>

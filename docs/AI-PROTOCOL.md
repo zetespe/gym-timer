@@ -109,9 +109,13 @@ upgraded on import.
 Double progression per exercise, using `repsMin`–`repsMax` (or the time /
 distance target) and `increment`:
 
-- every set at the top of the range → weight + increment next time
+- every planned set (`sets`) at the top of the range → weight + increment
+  next time; for a bodyweight exercise the exercise's `progression` text
+  (e.g. "drop the bar one notch") is the next step, or +1 rep without one
+- fewer sets than planned, all at the target → same load, add the missing set
 - inside the range but not at the top → repeat the weight
 - below the bottom once → repeat; twice in a row → about 10% less
 
-The app shows the suggestion; the user decides. Within a session the user
+The app shows the suggestion together with the plan's `progression` text in
+one block under "How to do it"; the user decides. Within a session the user
 drops weight whenever reps get ugly or anything hurts.

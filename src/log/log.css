@@ -49,8 +49,9 @@
 .tech ol, .tech ul { margin: 6px 0; padding-left: 20px; } .tech li { margin: 3px 0; }
 .tech .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim); margin-top: 8px; }
 .tech .watch li { color: var(--yellow); } .tech .watch li::marker { content: "⚠ "; }
-.tech .prog { margin-top: 8px; color: var(--green); } .tech .prog .lab { display: inline; margin-right: 4px; }
-.next { font-size: 14px; margin-top: 4px; color: var(--green); } .next.down { color: var(--yellow); } .next.repeat { color: var(--muted); }
+.tech .prog { margin-top: 8px; }
+.tech .prog .act { color: var(--green); } .tech .prog .act.down { color: var(--yellow); }
+.tech .prog .rule { color: var(--muted); margin-top: 2px; }
 .target { font-size: 14px; color: var(--dim); }
 .banner { background: #2a2413; border: 1px solid #5a4a1c; color: var(--yellow); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 10px 0; }
 .banner.info { background: #10231a; border-color: #1f5a30; color: var(--green); }

@@ -75,9 +75,21 @@ export function suggest(state, ex) {
   const hitAll = vals.every((v) => v >= target);
   const belowFloor = vals.some((v) => v < floor);
   const weighted = !ex.bodyweight && w != null;
+  // Progress only once every planned set was done. Fewer sets than planned at
+  // the target means: same load, add the missing set(s) first.
+  const planned = ex.sets || 0;
+  const missing = Math.max(0, planned - vals.length);
+  if (hitAll && missing > 0) {
+    const add = missing === 1 ? `add the ${ordinal(planned)} set` : `build to ${planned} sets`;
+    const same = weighted ? `Repeat ${w} ${unit}` : ex.mode === "reps" ? `Repeat ${target}s` : "Repeat";
+    return { kind: "repeat", weight: weighted ? w : undefined, text: `${same}, ${add}` };
+  }
   if (hitAll) {
     if (weighted) return { kind: "up", weight: round(w + inc), text: `Next: ${round(w + inc)} ${unit}` };
     if (ex.mode === "time") return { kind: "up", text: `Next: aim ${target + 5} s` };
+    // Bodyweight at the top of the range: the plan's own progression (a harder
+    // variation, a lower bar) is the next step. Only without one, add a rep.
+    if (ex.progression) return { kind: "up", fromPlan: true, text: ex.progression };
     return { kind: "up", text: `Next: aim ${target + 1} ${valUnit(ex.mode)}` };
   }
   if (belowFloor) {
@@ -94,6 +106,7 @@ export function suggest(state, ex) {
   return weighted ? { kind: "repeat", weight: w, text: `Repeat ${w} ${unit}` } : { kind: "repeat", text: "Repeat, then push for the top of the range" };
 }
 const round = (n) => Math.round(n * 100) / 100;
+const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
 
 // ---- session drafts ----
 export function newEntry(state, x) {
@@ -101,7 +114,8 @@ export function newEntry(state, x) {
   const last = lastFor(state.sessions, x.id);
   const sug = suggest(state, x);
   const k = valKey(e.mode);
-  const count = last ? last.entry.sets.length : x.sets || 3;
+  // Rows follow the plan; last time's numbers fill the rows that existed then.
+  const count = x.sets || (last ? last.entry.sets.length : 3);
   const fallback = e.mode === "time" ? x.secs ?? 30 : e.mode === "dist" ? x.dist ?? 30 : x.repsMin ?? 8;
   for (let i = 0; i < count; i++) {
     const ls = last ? last.entry.sets[i] || last.entry.sets[last.entry.sets.length - 1] : null;
