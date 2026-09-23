@@ -105,7 +105,7 @@ function WorkoutEditor({ w, unit, onBack }) {
         <Field label="How to do it (one step per line)"><textarea rows={4} value={(x.steps || []).join("\n")} onChange={(e) => set("steps", e.target.value.split("\n"))} onBlur={(e) => set("steps", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))} /></Field>
         <Field label="Watch for (common faults, one per line)"><textarea rows={3} value={(x.watchFor || []).join("\n")} onChange={(e) => set("watchFor", e.target.value.split("\n"))} onBlur={(e) => set("watchFor", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))} /></Field>
         <Field label="Progression note"><textarea rows={2} value={x.progression} onChange={(e) => set("progression", e.target.value)} /></Field>
-        <p className="muted small">Next-weight rule: all sets at the top of the range → weight goes up by the increment. In range but short of the top → repeat. Below the bottom twice in a row → about 10% less.</p>
+        <p className="muted small">Progression rule: every planned set at the top of the range → weight goes up by the increment (bodyweight: the progression note below becomes the next step). Fewer sets than planned → same load, add the missing set. In range but short of the top → repeat. Below the bottom twice in a row → about 10% less. The suggestion and this note show together under “How to do it”.</p>
         <button className="btn primary" onClick={() => setExIdx(null)}>Done</button>
       </div>
     );

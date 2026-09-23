@@ -10,7 +10,7 @@ export const SCHEMA = 3;
 export function emptyState() {
   return {
     version: SCHEMA,
-    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4 }, lastBackupAt: null, sessionsSinceBackup: 0 },
+    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4, rest: 0, perSet: 2 }, lastBackupAt: null, sessionsSinceBackup: 0 },
     plan: { name: "", loadNote: "", rules: [], stopRules: [], workouts: [] },
     sessions: [],
     draft: null,
@@ -42,6 +42,7 @@ export function migrate(raw) {
   }
   s.version = SCHEMA;
   s.settings = Object.assign(emptyState().settings, s.settings || {});
+  s.settings.timer = Object.assign(emptyState().settings.timer, s.settings.timer || {});
   s.plan = s.plan || { name: "", workouts: [] };
   s.plan.loadNote = s.plan.loadNote || "";
   s.plan.rules = strList(s.plan.rules);

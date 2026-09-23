@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry } from "./model";
 import { emptyState, migrate, strList } from "./store";
 
 describe("technique fields and training rules", () => {
@@ -188,5 +188,47 @@ describe("extractJSON", () => {
   it("throws when there is no JSON", () => {
     expect(() => extractJSON("no data here")).toThrow("No JSON found.");
     expect(() => extractJSON("{ broken")).toThrow("No JSON found.");
+  });
+});
+
+describe("suggest and prefill follow the planned set count", () => {
+  const row = { id: "inverted_row", name: "Inverted Row", mode: "reps", bodyweight: true, sets: 4, repsMin: 6, repsMax: 8, progression: "4×8 clean → drop the bar one notch" };
+  const goblet = { id: "goblet_squat", name: "Goblet Squat", mode: "reps", bodyweight: false, sets: 3, repsMin: 8, repsMax: 10, weight: 16, increment: 1 };
+  const withHist = (entries) => {
+    const st = emptyState();
+    st.sessions = entries.map((e, i) => ({ id: "s" + i, date: "2026-09-" + String(10 + i).padStart(2, "0"), workoutId: "b", name: "B", exercises: [e] }));
+    return st;
+  };
+  const rowEntry = (reps) => ({ exId: "inverted_row", name: "Inverted Row", mode: "reps", bodyweight: true, sets: reps.map((r) => ({ r })) });
+  const gobEntry = (w, reps) => ({ exId: "goblet_squat", name: "Goblet Squat", mode: "reps", sets: reps.map((r) => ({ w, r })) });
+
+  it("3×8 of a planned 4×6–8 asks for the 4th set, not a 9th rep", () => {
+    const s = suggest(withHist([rowEntry([8, 8, 8])]), row);
+    expect(s.kind).toBe("repeat");
+    expect(s.text).toBe("Repeat 8s, add the 4th set");
+  });
+
+  it("4×8 at the top of the range uses the plan's progression for bodyweight", () => {
+    const s = suggest(withHist([rowEntry([8, 8, 8, 8])]), row);
+    expect(s).toMatchObject({ kind: "up", fromPlan: true, text: "4×8 clean → drop the bar one notch" });
+  });
+
+  it("falls back to +1 rep for bodyweight without a progression note", () => {
+    const s = suggest(withHist([rowEntry([8, 8, 8, 8])]), { ...row, progression: "" });
+    expect(s.text).toBe("Next: aim 9 reps");
+  });
+
+  it("weighted: missing sets keep the weight; all sets at the top add the increment", () => {
+    expect(suggest(withHist([gobEntry(16, [10, 10])]), goblet)).toMatchObject({ kind: "repeat", weight: 16, text: "Repeat 16 kg, add the 3rd set" });
+    expect(suggest(withHist([gobEntry(16, [10, 10, 10])]), goblet)).toMatchObject({ kind: "up", weight: 17 });
+  });
+
+  it("two or more missing sets say how many to build to", () => {
+    expect(suggest(withHist([rowEntry([8, 8])]), row).text).toBe("Repeat 8s, build to 4 sets");
+  });
+
+  it("prefills the planned number of rows, reusing last time's numbers", () => {
+    const e = newEntry(withHist([rowEntry([8, 8, 7])]), row);
+    expect(e.sets.map((x) => x.r)).toEqual([8, 8, 7, 7]);
   });
 });

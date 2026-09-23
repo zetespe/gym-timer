@@ -41,6 +41,8 @@ export default function Session({ onFinished, onExit }) {
       // Cue beeps only on single-step transitions — skipped seconds after a
       // background resume stay silent.
       if (left <= 4 && left > 1 && restPrev.current === left + 1) beep(660, 80, 0.3);
+      // Long rests get a spoken warning so you can get into position.
+      if (left === 15 && rest.total >= 25 && restPrev.current === 16) { beep(880, 120, 0.4); setTimeout(() => speak("15 seconds. Get ready."), 150); }
       if (left > 0) restPrev.current = left; // 0 is recorded by the finish branch, after it announces "Go"
       setRest((r) => (r ? { ...r, left } : r));
     };
@@ -108,15 +110,14 @@ export default function Session({ onFinished, onExit }) {
             <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>{allDone && <span className="pill ok">✓ done</span>}</div>
             {targetText && <div className="target">{targetText}</div>}
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
-            {sug.text && <div className={"next " + sug.kind}>{sug.text}</div>}
             {px && px.cue && <div className="cue">{px.cue}</div>}
-            {px && <Technique x={px} />}
+            {px && <Technique x={px} sug={sug} />}
             <div className="sets">
               {e.sets.map((s, si) => (
                 <div className={"set" + (hasW ? "" : " nw")} key={si}>
                   <div className="n">{si + 1}</div>
                   {hasW && <Stepper value={s.w} step={unit === "kg" ? 1 : 2.5} unit={unit} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].w = v; })} />}
-                  <Stepper value={s[k]} step={e.mode === "reps" ? 1 : 5} unit={valUnit(e.mode)} inputMode="numeric" onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />
+                  <Stepper value={s[k]} step={e.mode === "dist" ? 5 : 1} unit={valUnit(e.mode)} inputMode="numeric" onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />
                   <div><button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="set done">✓</button></div>
                 </div>
               ))}
@@ -168,15 +169,24 @@ export default function Session({ onFinished, onExit }) {
         <div className="overlay">
           <button className="btn sm close" onClick={() => setTimerFor(null)}>‹ Back</button>
           <GymTimer
-            preset={{ hold: d.exercises[timerFor].sets[0]?.s || 20, swap: d.exercises[timerFor].perSide ? S.settings.timer.swap : 4 }}
-            onResult={({ reps, hold }) => {
+            preset={{
+              hold: d.exercises[timerFor].sets[0]?.s || 20,
+              swap: (S.settings.timer && S.settings.timer.swap) || 4,
+              rest: d.exercises[timerFor].rest || 90,
+              perSet: d.exercises[timerFor].perSide ? 2 : 1,
+              // Run only the sets not ticked yet; the timer stops by itself after the last one.
+              sets: d.exercises[timerFor].sets.filter((s) => !s.done).length || d.exercises[timerFor].sets.length || 3,
+            }}
+            onResult={({ sets: reps, hold, partial }) => {
               // Sets already ticked (earlier timer runs, manual logging) are
               // kept and the new holds appended after them; only untouched
               // prefilled sets are replaced. Weight carries over set by set —
               // a weighted hold must not come back as bodyweight.
-              if (reps > 0) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; const kept = old.filter((s) => s.done); ex.sets = [...kept, ...Array.from({ length: reps }, (_, i) => { const o = { done: true, s: hold }; const w = old[kept.length + i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; })]; });
+              // A hold stopped early (to failure) is logged with its real length.
+              const secs = [...Array.from({ length: reps }, () => hold), ...(partial > 0 ? [partial] : [])];
+              if (secs.length) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; const kept = old.filter((s) => s.done); ex.sets = [...kept, ...secs.map((sec, i) => { const o = { done: true, s: sec }; const w = old[kept.length + i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; })]; });
               setTimerFor(null);
-              if (reps > 0) toast(`${reps} × ${hold} s recorded for ${d.exercises[timerFor].name}`);
+              if (secs.length) toast(`${secs.join(", ")} s recorded for ${d.exercises[timerFor].name}`);
             }}
           />
         </div>
