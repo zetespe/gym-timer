@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLog, setState, today } from "./store";
 import { fmtDate, fmtEntry, sortedSessions, startDraft, summaryText, draftHasProgress } from "./model";
 import { copyText } from "./ui";
@@ -8,6 +8,13 @@ export default function Today({ go, justFinished }) {
   const unit = S.settings.unit;
   const d = S.draft;
   const [switchTo, setSwitchTo] = useState(null); // { w } waiting for Cancel / OK
+  // Escape closes the pop-up (keyboard users; same as Cancel).
+  useEffect(() => {
+    if (!switchTo) return;
+    const onKey = (e) => { if (e.key === "Escape") setSwitchTo(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [switchTo]);
   const begin = (w) => { setSwitchTo(null); setState((s) => ({ ...s, draft: startDraft(s, w) })); go("session"); };
   // Only one session runs at a time. Tapping the running workout continues it;
   // tapping another one asks first whenever the running session holds data.
