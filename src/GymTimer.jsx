@@ -384,7 +384,9 @@ export default function GymTimer({ preset, onResult } = {}) {
             step={5}
             color="#64A8FF"
           />
-          {usesSets && (
+          {/* Always rendered, hidden when unused, so turning REST on doesn't
+              shift REST's own buttons out from under a press-and-hold. */}
+          <div style={{ visibility: usesSets ? "visible" : "hidden" }} aria-hidden={!usesSets}>
             <SettingControl
               label="HOLDS / SET"
               unit=""
@@ -395,7 +397,7 @@ export default function GymTimer({ preset, onResult } = {}) {
               step={1}
               color="#64A8FF"
             />
-          )}
+          </div>
         </div>
       )}
 
@@ -497,9 +499,12 @@ function useRepeatPress(fn) {
   useEffect(() => { fnRef.current = fn; });
   const timers = useRef({ delay: null, repeat: null, repeated: false });
   const stop = () => { clearTimeout(timers.current.delay); clearInterval(timers.current.repeat); };
+  // Ending off the button fires no click, so the "swallow next click" flag must go too.
+  const abandon = () => { stop(); timers.current.repeated = false; };
   useEffect(() => stop, []);
   return {
-    onPointerDown: () => {
+    onPointerDown: (e) => {
+      if (e.button !== 0) return; // primary button / touch / pen only
       stop();
       timers.current.repeated = false;
       timers.current.delay = setTimeout(() => {
@@ -509,11 +514,12 @@ function useRepeatPress(fn) {
       }, 400);
     },
     onPointerUp: stop,
-    onPointerLeave: stop,
-    onPointerCancel: stop,
+    onPointerLeave: abandon,
+    onPointerCancel: abandon,
     onContextMenu: (e) => e.preventDefault(),
     // A long press already stepped; swallow the click that follows it.
-    onClick: () => { if (timers.current.repeated) { timers.current.repeated = false; return; } fnRef.current(); },
+    // (e.detail === 0 is a keyboard click: always one step.)
+    onClick: (e) => { if (timers.current.repeated && e.detail !== 0) { timers.current.repeated = false; return; } timers.current.repeated = false; fnRef.current(); },
   };
 }
 
@@ -538,7 +544,8 @@ function SettingControl({ label, unit, value, onChange, min, max, step, color })
         <button {...down} style={smallBtnStyle}>
           −
         </button>
-        <div>
+        {/* Fixed width: the number growing (0 → 115) must not slide the buttons. */}
+        <div style={{ minWidth: "92px", textAlign: "center", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
           <span style={{ fontSize: "28px", fontWeight: 700, color: "#FFF" }}>{value}</span>
           <span style={{ fontSize: "11px", color: "#666", marginLeft: "4px" }}>{unit}</span>
         </div>
