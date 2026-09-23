@@ -118,7 +118,7 @@ export default function Session({ onFinished, onExit }) {
                 <div className={"set" + (hasW ? "" : " nw")} key={si}>
                   <div className="n">{si + 1}</div>
                   {hasW && <Stepper value={s.w} step={unit === "kg" ? 1 : 2.5} unit={unit} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].w = v; })} />}
-                  <Stepper value={s[k]} step={e.mode === "reps" ? 1 : 5} unit={valUnit(e.mode)} inputMode="numeric" onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />
+                  <Stepper value={s[k]} step={e.mode === "dist" ? 5 : 1} unit={valUnit(e.mode)} inputMode="numeric" onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />
                   <div><button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="set done">✓</button></div>
                 </div>
               ))}
@@ -178,14 +178,16 @@ export default function Session({ onFinished, onExit }) {
               // Run only the sets not ticked yet; the timer stops by itself after the last one.
               sets: d.exercises[timerFor].sets.filter((s) => !s.done).length || d.exercises[timerFor].sets.length || 3,
             }}
-            onResult={({ sets: reps, hold }) => {
+            onResult={({ sets: reps, hold, partial }) => {
               // Sets already ticked (earlier timer runs, manual logging) are
               // kept and the new holds appended after them; only untouched
               // prefilled sets are replaced. Weight carries over set by set —
               // a weighted hold must not come back as bodyweight.
-              if (reps > 0) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; const kept = old.filter((s) => s.done); ex.sets = [...kept, ...Array.from({ length: reps }, (_, i) => { const o = { done: true, s: hold }; const w = old[kept.length + i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; })]; });
+              // A hold stopped early (to failure) is logged with its real length.
+              const secs = [...Array.from({ length: reps }, () => hold), ...(partial > 0 ? [partial] : [])];
+              if (secs.length) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; const kept = old.filter((s) => s.done); ex.sets = [...kept, ...secs.map((sec, i) => { const o = { done: true, s: sec }; const w = old[kept.length + i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; })]; });
               setTimerFor(null);
-              if (reps > 0) toast(`${reps} × ${hold} s recorded for ${d.exercises[timerFor].name}`);
+              if (secs.length) toast(`${secs.join(", ")} s recorded for ${d.exercises[timerFor].name}`);
             }}
           />
         </div>

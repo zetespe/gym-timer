@@ -143,12 +143,16 @@ export default function GymTimer({ preset, onResult } = {}) {
   // `holdComplete` is true when called from the tick at the very end of the last hold.
   const handleStop = useCallback((holdComplete = false) => {
     cleanup();
-    const holds = phaseRef.current === PHASE_HOLD && holdComplete !== true ? Math.max(0, repRef.current - 1) : repRef.current;
+    const stoppedMidHold = phaseRef.current === PHASE_HOLD && holdComplete !== true;
+    const holds = stoppedMidHold ? Math.max(0, repRef.current - 1) : repRef.current;
+    // Stopping during a hold (e.g. a dead hang to failure) reports how long that
+    // hold lasted, so the real number gets logged instead of nothing.
+    const partial = stoppedMidHold ? Math.max(0, holdTime - timeRef.current) : 0;
     phaseRef.current = PHASE_IDLE;
     setPhase(PHASE_IDLE);
     speak("Done!");
     doubleBeep();
-    if (onResult) onResult({ holds, sets: Math.ceil(holds / Math.max(1, usesSets ? perSet : 1)), hold: holdTime, perSet: usesSets ? perSet : 1 });
+    if (onResult) onResult({ holds, sets: Math.ceil(holds / Math.max(1, usesSets ? perSet : 1)), hold: holdTime, perSet: usesSets ? perSet : 1, partial: partial >= 3 ? partial : 0 });
   }, [cleanup, onResult, holdTime, usesSets, perSet]);
   useEffect(() => { finishRef.current = handleStop; }, [handleStop]);
 
