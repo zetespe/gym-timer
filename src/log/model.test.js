@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress } from "./model";
 import { emptyState, migrate, strList } from "./store";
 
 describe("technique fields and training rules", () => {
@@ -230,5 +230,23 @@ describe("suggest and prefill follow the planned set count", () => {
   it("prefills the planned number of rows, reusing last time's numbers", () => {
     const e = newEntry(withHist([rowEntry([8, 8, 7])]), row);
     expect(e.sets.map((x) => x.r)).toEqual([8, 8, 7, 7]);
+  });
+});
+
+describe("draftHasProgress", () => {
+  const draft = (over = {}) => ({ id: "d", name: "Session B", notes: "", exercises: [{ exId: "x", name: "X", notes: "", sets: [{ r: 8, done: false }, { r: 8, done: false }] }], ...over });
+  it("is false with no draft or only prefilled, unticked sets", () => {
+    expect(draftHasProgress(null)).toBe(false);
+    expect(draftHasProgress(draft())).toBe(false);
+  });
+  it("is true once a set is ticked", () => {
+    const d = draft(); d.exercises[0].sets[1].done = true;
+    expect(draftHasProgress(d)).toBe(true);
+  });
+  it("is true with an exercise note or a session note, ignoring whitespace", () => {
+    const d = draft(); d.exercises[0].notes = "bar at chest";
+    expect(draftHasProgress(d)).toBe(true);
+    expect(draftHasProgress(draft({ notes: "tired" }))).toBe(true);
+    expect(draftHasProgress(draft({ notes: "   " }))).toBe(false);
   });
 });

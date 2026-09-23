@@ -127,6 +127,14 @@ export function newEntry(state, x) {
   return e;
 }
 
+// True when a session in progress holds anything worth keeping: a ticked set
+// or a note. Prefilled but unticked numbers don't count; they come back anyway.
+export function draftHasProgress(d) {
+  if (!d) return false;
+  if ((d.notes || "").trim()) return true;
+  return (d.exercises || []).some((e) => (e.notes || "").trim() || (e.sets || []).some((s) => s.done));
+}
+
 export function startDraft(state, workout) {
   const d = { id: today() + "-" + uid(), date: today(), workoutId: workout ? workout.id : "free", name: workout ? workout.name : "Free session", startedAt: new Date().toISOString(), notes: "", exercises: [] };
   if (workout) for (const x of workout.exercises) d.exercises.push(newEntry(state, x));
