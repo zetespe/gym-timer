@@ -41,6 +41,8 @@ export default function Session({ onFinished, onExit }) {
       // Cue beeps only on single-step transitions — skipped seconds after a
       // background resume stay silent.
       if (left <= 4 && left > 1 && restPrev.current === left + 1) beep(660, 80, 0.3);
+      // Long rests get a spoken warning so you can get into position.
+      if (left === 15 && rest.total >= 25 && restPrev.current === 16) { beep(880, 120, 0.4); setTimeout(() => speak("15 seconds. Get ready."), 150); }
       if (left > 0) restPrev.current = left; // 0 is recorded by the finish branch, after it announces "Go"
       setRest((r) => (r ? { ...r, left } : r));
     };
@@ -168,8 +170,15 @@ export default function Session({ onFinished, onExit }) {
         <div className="overlay">
           <button className="btn sm close" onClick={() => setTimerFor(null)}>‹ Back</button>
           <GymTimer
-            preset={{ hold: d.exercises[timerFor].sets[0]?.s || 20, swap: d.exercises[timerFor].perSide ? S.settings.timer.swap : 4 }}
-            onResult={({ reps, hold }) => {
+            preset={{
+              hold: d.exercises[timerFor].sets[0]?.s || 20,
+              swap: (S.settings.timer && S.settings.timer.swap) || 4,
+              rest: d.exercises[timerFor].rest || 90,
+              perSet: d.exercises[timerFor].perSide ? 2 : 1,
+              // Run only the sets not ticked yet; the timer stops by itself after the last one.
+              sets: d.exercises[timerFor].sets.filter((s) => !s.done).length || d.exercises[timerFor].sets.length || 3,
+            }}
+            onResult={({ sets: reps, hold }) => {
               // Sets already ticked (earlier timer runs, manual logging) are
               // kept and the new holds appended after them; only untouched
               // prefilled sets are replaced. Weight carries over set by set —

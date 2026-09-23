@@ -7,15 +7,32 @@ const PHASE_IDLE = "idle";
 const PHASE_HOLD = "hold";
 const PHASE_SWAP = "swap";
 const PHASE_COUNTDOWN = "countdown";
+const PHASE_REST = "rest";
+const DEFAULTS = { hold: 20, swap: 4, rest: 0, perSet: 2 };
 
-// `preset` overrides the saved hold/swap times (used when opened from a timed
-// exercise); `onResult({ reps, hold })` is called on STOP when provided.
+// Phases: HOLD, then SWAP between holds of the same set (e.g. left/right), then
+// REST between sets when a rest time is set. With rest = 0 the timer alternates
+// hold/swap forever, as it always did.
+// `preset` = { hold, swap, rest, perSet, sets } overrides the saved settings (used
+// when opened from a timed exercise); `onResult({ holds, sets, hold, perSet })`
+// is called on STOP or when the preset number of sets is complete.
 export default function GymTimer({ preset, onResult } = {}) {
-  const saved = getState().settings.timer || { hold: 20, swap: 4 };
+  const saved = Object.assign({}, DEFAULTS, getState().settings.timer || {});
   const [holdTime, setHoldTimeRaw] = useState(preset?.hold ?? saved.hold);
   const [swapTime, setSwapTimeRaw] = useState(preset?.swap ?? saved.swap);
-  const setHoldTime = (v) => { setHoldTimeRaw(v); if (!preset) patch((st) => { st.settings.timer.hold = v; }); };
-  const setSwapTime = (v) => { setSwapTimeRaw(v); if (!preset) patch((st) => { st.settings.timer.swap = v; }); };
+  const [restTime, setRestTimeRaw] = useState(preset?.rest ?? saved.rest);
+  const [perSet, setPerSetRaw] = useState(preset?.perSet ?? saved.perSet);
+  const targetSets = preset?.sets || 0;
+  const persist = (k, v) => { if (!preset) patch((st) => { st.settings.timer = Object.assign({}, DEFAULTS, st.settings.timer || {}, { [k]: v }); }); };
+  const setHoldTime = (v) => { setHoldTimeRaw(v); persist("hold", v); };
+  const setSwapTime = (v) => { setSwapTimeRaw(v); persist("swap", v); };
+  const setRestTime = (v) => { setRestTimeRaw(v); persist("rest", v); };
+  const setPerSet = (v) => { setPerSetRaw(v); persist("perSet", v); };
+  const [setNo, setSetNo] = useState(0);
+  const [holdInSet, setHoldInSet] = useState(0);
+  const setRef = useRef(0);
+  const holdInSetRef = useRef(0);
+  const finishRef = useRef(() => {});
   const [phase, setPhase] = useState(PHASE_IDLE);
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -38,18 +55,34 @@ export default function GymTimer({ preset, onResult } = {}) {
 
   useEffect(() => () => cleanup(), [cleanup]);
 
+  const usesSets = restTime > 0;
+
   const startHoldPhase = useCallback(() => {
     const newRep = repRef.current + 1;
     repRef.current = newRep;
     setRep(newRep);
     setTotalReps((p) => Math.max(p, newRep));
+    if (usesSets && holdInSetRef.current === 0) { setRef.current += 1; setSetNo(setRef.current); }
+    holdInSetRef.current += 1;
+    setHoldInSet(holdInSetRef.current);
     phaseRef.current = PHASE_HOLD;
     setPhase(PHASE_HOLD);
     timeRef.current = holdTime;
     setTimeLeft(holdTime);
     tripleBeep();
-    setTimeout(() => speak(`Rep ${newRep}. Go!`), 350);
-  }, [holdTime]);
+    const label = usesSets ? (perSet > 1 ? `Set ${setRef.current}, ${holdInSetRef.current === 1 ? "first side" : "other side"}` : `Set ${setRef.current}`) : `Rep ${newRep}`;
+    setTimeout(() => speak(`${label}. Go!`), 350);
+  }, [holdTime, usesSets, perSet]);
+
+  const startRestPhase = useCallback(() => {
+    holdInSetRef.current = 0;
+    phaseRef.current = PHASE_REST;
+    setPhase(PHASE_REST);
+    timeRef.current = restTime;
+    setTimeLeft(restTime);
+    doubleBeep();
+    setTimeout(() => speak(`Rest. ${restTime} seconds.`), 200);
+  }, [restTime]);
 
   const startSwapPhase = useCallback(() => {
     phaseRef.current = PHASE_SWAP;
@@ -65,28 +98,39 @@ export default function GymTimer({ preset, onResult } = {}) {
     timeRef.current = newTime;
     setTimeLeft(newTime);
 
-    if (phaseRef.current === PHASE_HOLD) {
+    if (phaseRef.current === PHASE_HOLD || phaseRef.current === PHASE_REST) {
       if (newTime === 3) beep(660, 80, 0.3);
       if (newTime === 2) beep(660, 80, 0.3);
       if (newTime === 1) beep(660, 80, 0.3);
     }
+    // Long rests get a spoken warning so you can get into position. Short swaps don't.
+    if (phaseRef.current === PHASE_REST && newTime === 15 && restTime >= 25) {
+      beep(880, 120, 0.4);
+      setTimeout(() => speak("15 seconds. Get ready."), 150);
+    }
 
     if (newTime <= 0) {
       if (phaseRef.current === PHASE_HOLD) {
-        startSwapPhase();
-      } else if (phaseRef.current === PHASE_SWAP) {
-        startHoldPhase();
-      } else if (phaseRef.current === PHASE_COUNTDOWN) {
+        if (usesSets && holdInSetRef.current >= perSet) {
+          if (targetSets && setRef.current >= targetSets) { finishRef.current(true); return; }
+          startRestPhase();
+        } else {
+          startSwapPhase();
+        }
+      } else if (phaseRef.current === PHASE_SWAP || phaseRef.current === PHASE_REST || phaseRef.current === PHASE_COUNTDOWN) {
         startHoldPhase();
       }
     }
-  }, [startSwapPhase, startHoldPhase]);
+  }, [startSwapPhase, startHoldPhase, startRestPhase, usesSets, perSet, targetSets, restTime]);
 
   const handleStart = useCallback(() => {
     cleanup();
     repRef.current = 0;
     setRep(0);
     setTotalReps(0);
+    setRef.current = 0;
+    setSetNo(0);
+    holdInSetRef.current = 0;
     phaseRef.current = PHASE_COUNTDOWN;
     setPhase(PHASE_COUNTDOWN);
     timeRef.current = 3;
@@ -96,15 +140,17 @@ export default function GymTimer({ preset, onResult } = {}) {
     intervalRef.current = setInterval(tick, 1000);
   }, [cleanup, tick]);
 
-  const handleStop = useCallback(() => {
+  // `holdComplete` is true when called from the tick at the very end of the last hold.
+  const handleStop = useCallback((holdComplete = false) => {
     cleanup();
-    const completed = phaseRef.current === PHASE_HOLD ? Math.max(0, repRef.current - 1) : repRef.current;
+    const holds = phaseRef.current === PHASE_HOLD && holdComplete !== true ? Math.max(0, repRef.current - 1) : repRef.current;
     phaseRef.current = PHASE_IDLE;
     setPhase(PHASE_IDLE);
     speak("Done!");
     doubleBeep();
-    if (onResult) onResult({ reps: completed, hold: holdTime });
-  }, [cleanup, onResult, holdTime]);
+    if (onResult) onResult({ holds, sets: Math.ceil(holds / Math.max(1, usesSets ? perSet : 1)), hold: holdTime, perSet: usesSets ? perSet : 1 });
+  }, [cleanup, onResult, holdTime, usesSets, perSet]);
+  useEffect(() => { finishRef.current = handleStop; }, [handleStop]);
 
   const handleTestSound = useCallback(() => {
     beep(880, 150, 0.5);
@@ -120,6 +166,8 @@ export default function GymTimer({ preset, onResult } = {}) {
       ? "SWITCH"
       : phase === PHASE_COUNTDOWN
       ? "READY"
+      : phase === PHASE_REST
+      ? "REST"
       : "";
 
   const phaseColor =
@@ -129,6 +177,8 @@ export default function GymTimer({ preset, onResult } = {}) {
       ? "#30D158"
       : phase === PHASE_COUNTDOWN
       ? "#FFD60A"
+      : phase === PHASE_REST
+      ? "#64A8FF"
       : "#666";
 
   const progressPct =
@@ -138,6 +188,8 @@ export default function GymTimer({ preset, onResult } = {}) {
       ? ((swapTime - timeLeft) / swapTime) * 100
       : phase === PHASE_COUNTDOWN
       ? ((3 - timeLeft) / 3) * 100
+      : phase === PHASE_REST
+      ? ((restTime - timeLeft) / restTime) * 100
       : 0;
 
   return (
@@ -217,7 +269,7 @@ export default function GymTimer({ preset, onResult } = {}) {
             marginBottom: "24px",
           }}
         >
-          REP {rep}
+          {usesSets ? `SET ${setNo}${targetSets ? ` / ${targetSets}` : ""}${perSet > 1 ? ` · HOLD ${Math.max(1, holdInSet)} / ${perSet}` : ""}` : `REP ${rep}`}
         </div>
       )}
 
@@ -304,6 +356,28 @@ export default function GymTimer({ preset, onResult } = {}) {
             step={1}
             color="#30D158"
           />
+          <SettingControl
+            label="REST"
+            unit={restTime ? "sec" : "off"}
+            value={restTime}
+            onChange={setRestTime}
+            min={0}
+            max={300}
+            step={15}
+            color="#64A8FF"
+          />
+          {restTime > 0 && (
+            <SettingControl
+              label="HOLDS / SET"
+              unit=""
+              value={perSet}
+              onChange={setPerSet}
+              min={1}
+              max={4}
+              step={1}
+              color="#64A8FF"
+            />
+          )}
         </div>
       )}
 
@@ -320,7 +394,7 @@ export default function GymTimer({ preset, onResult } = {}) {
           </>
         ) : (
           <>
-            <button onClick={handleStop} style={btnStyle("#333", "#FF3B30")}>
+            <button onClick={() => handleStop(false)} style={btnStyle("#333", "#FF3B30")}>
               STOP
             </button>
             <button onClick={() => setDimmed(true)} style={btnStyle("#111", "#666")}>
