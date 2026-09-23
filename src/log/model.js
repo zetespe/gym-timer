@@ -81,7 +81,7 @@ export function suggest(state, ex) {
   const missing = Math.max(0, planned - vals.length);
   if (hitAll && missing > 0) {
     const add = missing === 1 ? `add the ${ordinal(planned)} set` : `build to ${planned} sets`;
-    const same = weighted ? `Repeat ${w} ${unit}` : ex.mode === "reps" ? `Repeat ${target}s` : "Repeat";
+    const same = weighted ? `Repeat ${w} ${unit}` : ex.mode === "reps" ? `Repeat ${target} reps` : "Repeat";
     return { kind: "repeat", weight: weighted ? w : undefined, text: `${same}, ${add}` };
   }
   if (hitAll) {
