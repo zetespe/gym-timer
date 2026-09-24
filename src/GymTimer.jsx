@@ -287,7 +287,7 @@ export default function GymTimer({ preset, onResult } = {}) {
             marginBottom: "24px",
           }}
         >
-          {usesSets ? `SET ${setNo}${targetSets ? ` / ${targetSets}` : ""}${perSet > 1 ? ` · HOLD ${Math.max(1, holdInSet)} / ${perSet}` : ""}` : `REP ${rep}`}
+          {usesSets ? `SET ${setNo}${targetSets ? ` / ${targetSets}` : ""}${perSet > 1 ? ` · WORK ${Math.max(1, holdInSet)} / ${perSet}` : ""}` : `REP ${rep}`}
         </div>
       )}
 
@@ -344,19 +344,10 @@ export default function GymTimer({ preset, onResult } = {}) {
       </div>
 
       {/* Settings (only when idle) */}
+      {/* 2×2 settings grid; layout rules live in log.css (.timer-settings)
+          including the single-column fallback for ultra-narrow screens. */}
       {!isRunning && (
-        <div
-          style={{
-            // Fixed 2×2 grid: two controls side by side, two underneath, at
-            // any phone width — a wrapping flex row stacked them vertically.
-            display: "grid",
-            gridTemplateColumns: "repeat(2, max-content)",
-            columnGap: "24px",
-            rowGap: "28px",
-            justifyContent: "center",
-            marginBottom: "36px",
-          }}
-        >
+        <div className="timer-settings">
           <SettingControl
             label="WORK"
             unit="sec"
@@ -385,23 +376,23 @@ export default function GymTimer({ preset, onResult } = {}) {
             min={0}
             max={300}
             step={5}
+            sizerUnit="sec"
             color="#64A8FF"
           />
           {/* Always rendered as a "ghost" when unused: the 2×2 stays symmetric,
               nothing shifts out from under a press-and-hold when REST toggles,
-              and the dimmed control hints that REST unlocks it. */}
-          <div style={{ opacity: usesSets ? 1 : 0.32, pointerEvents: usesSets ? "auto" : "none", transition: "opacity 0.3s ease" }} aria-disabled={!usesSets}>
-            <SettingControl
-              label="PER SET"
-              unit=""
-              value={perSet}
-              onChange={setPerSet}
-              min={1}
-              max={4}
-              step={1}
-              color="#64A8FF"
-            />
-          </div>
+              and the dimmed disabled control hints that REST unlocks it. */}
+          <SettingControl
+            label="PER SET"
+            unit=""
+            value={perSet}
+            onChange={setPerSet}
+            min={1}
+            max={4}
+            step={1}
+            disabled={!usesSets}
+            color="#64A8FF"
+          />
         </div>
       )}
 
@@ -498,7 +489,7 @@ export default function GymTimer({ preset, onResult } = {}) {
 
 // +/- buttons: a tap moves one step; holding a button repeats, so long ranges
 // (REST up to 300 s in 5 s steps) don't need dozens of taps.
-function useRepeatPress(fn) {
+function useRepeatPress(fn, enabled = true) {
   const fnRef = useRef(fn);
   useEffect(() => { fnRef.current = fn; });
   const timers = useRef({ delay: null, repeat: null, repeated: false });
@@ -506,6 +497,9 @@ function useRepeatPress(fn) {
   // Ending off the button fires no click, so the "swallow next click" flag must go too.
   const abandon = () => { stop(); timers.current.repeated = false; };
   useEffect(() => stop, []);
+  // A button disabled mid-hold stops dispatching pointer events, so the
+  // release would never reach us — kill any running repeat ourselves.
+  useEffect(() => { if (!enabled) abandon(); }, [enabled]);
   return {
     onPointerDown: (e) => {
       if (e.button !== 0) return; // primary button / touch / pen only
@@ -527,13 +521,21 @@ function useRepeatPress(fn) {
   };
 }
 
-function SettingControl({ label, unit, value, onChange, min, max, step, color }) {
+// `sizerUnit`: the widest unit this control can show (REST alternates
+// "sec"/"off", so it passes "sec" explicitly).
+function SettingControl({ label, unit, value, onChange, min, max, step, color, sizerUnit = unit, disabled = false }) {
   const valueRef = useRef(value);
   useEffect(() => { valueRef.current = value; }, [value]);
-  const down = useRepeatPress(() => { const v = Math.max(min, valueRef.current - step); valueRef.current = v; onChange(v); });
-  const up = useRepeatPress(() => { const v = Math.min(max, valueRef.current + step); valueRef.current = v; onChange(v); });
+  const down = useRepeatPress(() => { const v = Math.max(min, valueRef.current - step); valueRef.current = v; onChange(v); }, !disabled);
+  const up = useRepeatPress(() => { const v = Math.min(max, valueRef.current + step); valueRef.current = v; onChange(v); }, !disabled);
+  const stepBtnStyle = { ...smallBtnStyle, cursor: disabled ? "default" : "pointer" };
+  // The sizer must render with EXACTLY the visible spans' metrics, or the
+  // width pinning silently breaks — one shared style for each, used twice.
+  // A preset can exceed `max` (plan text like "rest 20 min"), so the sizer
+  // shows whichever is wider.
+  const sizerValue = Math.max(max, typeof value === "number" ? value : 0);
   return (
-    <div style={{ textAlign: "center" }}>
+    <div style={{ textAlign: "center", opacity: disabled ? 0.32 : 1, transition: "opacity 0.3s ease" }}>
       <div
         style={{
           fontSize: "10px",
@@ -544,24 +546,34 @@ function SettingControl({ label, unit, value, onChange, min, max, step, color })
       >
         {label}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <button {...down} style={smallBtnStyle}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+        {/* `disabled` on the buttons covers pointer, keyboard AND screen
+            readers at once — a pointer-events wrapper misses the last two. */}
+        <button {...down} disabled={disabled} style={stepBtnStyle}>
           −
         </button>
-        {/* Fixed width: the number growing (0 → 300) must not slide the buttons.
-            72px fits the widest value ("300 sec") and keeps two controls per row
-            on a 390px phone. */}
-        <div style={{ minWidth: "72px", textAlign: "center", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-          <span style={{ fontSize: "28px", fontWeight: 700, color: "#FFF" }}>{value}</span>
-          <span style={{ fontSize: "11px", color: "#666", marginLeft: "4px" }}>{unit}</span>
+        {/* The value box must not grow as the number does, or the buttons
+            slide out from under a press-and-hold. An invisible sizer line
+            rendering this control's widest possible value pins the width
+            using the real font metrics of whatever platform we're on. */}
+        <div style={{ textAlign: "center", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+          <div aria-hidden="true" style={{ height: 0, overflow: "hidden", visibility: "hidden" }}>
+            <span style={valueTextStyle}>{sizerValue}</span>
+            {sizerUnit && <span style={unitTextStyle}>{sizerUnit}</span>}
+          </div>
+          <span style={{ ...valueTextStyle, color: "#FFF" }}>{value}</span>
+          {unit && <span style={{ ...unitTextStyle, color: "#666" }}>{unit}</span>}
         </div>
-        <button {...up} style={smallBtnStyle}>
+        <button {...up} disabled={disabled} style={stepBtnStyle}>
           +
         </button>
       </div>
     </div>
   );
 }
+
+const valueTextStyle = { fontSize: "28px", fontWeight: 700 };
+const unitTextStyle = { fontSize: "11px", marginLeft: "4px" };
 
 const btnStyle = (bg, textColor) => ({
   padding: "16px 40px",

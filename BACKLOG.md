@@ -120,7 +120,23 @@ awake; Media Session metadata leaking into the lock screen. The complete fix
 remains a native wrapper (Capacitor) with local notifications — a much bigger
 project.
 
-## 6. App icons are placeholders
+## 6. Timer settings: breakpoint vs. floating font metrics (accepted risk)
+
+**What we found (review, 2026-09-24):** the timer's 2×2 settings grid falls
+back to one column below 350px via a hardcoded breakpoint, while the control
+widths now derive from the device's actual font. On a device with an
+unusually wide monospace fallback (or large accessibility font scaling), two
+columns could overflow between 350–390px and clip the +/− buttons.
+
+**What needs to be done:** replace the pixel breakpoint with a width-driven
+mechanism (container query, or a wrapping layout that can't clip). Deferred
+as speculative — no known real device hits it; re-check if anyone reports
+clipped timer buttons.
+
+**Expected user experience:** none on common devices; on exotic ones the
+grid would wrap instead of clipping.
+
+## 7. App icons are placeholders
 
 **What we found:** the home-screen and browser icons are generated stopwatch
 placeholders (from `icon.svg`), kept from the original Gym Timer.

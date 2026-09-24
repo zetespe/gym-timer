@@ -66,6 +66,16 @@ nav.tabs button.on { color: var(--green); }
 .rest .t { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: "JetBrains Mono", "SF Mono", monospace; min-width: 60px; }
 .rest .bar { flex: 1; height: 4px; background: #333; border-radius: 2px; overflow: hidden; } .rest .bar div { height: 100%; background: var(--green); transition: width 1s linear; }
 .rest.late .t { color: var(--red); } .rest.late .small { color: var(--red); }
+
+/* Timer settings: 2×2 (WORK+SWAP over REST+PER SET). Control widths come
+   from SettingControl in GymTimer.jsx (an invisible sizer rendering each
+   control's widest value, so they track the platform font). The gap shrinks
+   with the viewport so two columns fit down to ~350px; below that the grid
+   degrades to a single centred column instead of clipping buttons. If a
+   control's max value or font size changes in GymTimer.jsx, re-check this
+   breakpoint at 350-390px widths. */
+.timer-settings { display: grid; grid-template-columns: repeat(2, max-content); column-gap: min(24px, 3vw); row-gap: 28px; justify-content: center; margin-bottom: 36px; }
+@media (max-width: 349px) { .timer-settings { grid-template-columns: max-content; } }
 .overlay { position: fixed; inset: 0; z-index: 70; background: var(--bg); overflow: auto; }
 .overlay .close { position: fixed; top: calc(12px + var(--sat)); left: 12px; z-index: 71; }
 details summary { cursor: pointer; }

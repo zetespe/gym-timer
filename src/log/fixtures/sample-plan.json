@@ -1,0 +1,34 @@
+{
+  "type": "gym-import",
+  "plan": {
+    "name": "Sample plan",
+    "loadNote": "First week back: start lighter than listed.",
+    "rules": ["Last set feels easy → smallest increment next time"],
+    "stopRules": ["Pain during an exercise = stop"],
+    "workouts": [
+      {
+        "id": "a",
+        "name": "Workout A",
+        "intent": "Sample workout used by the import tests.",
+        "exercises": [
+          {
+            "id": "goblet_squat", "name": "Goblet Squat", "mode": "reps", "sets": 3,
+            "repsMin": 8, "repsMax": 10, "weight": 16, "increment": 1, "rest": 90,
+            "cue": "Elbows inside knees",
+            "steps": ["Hold the bell against your chest", "Sit straight down", "Drive up through the whole foot"],
+            "watchFor": ["Knees caving in", "Heels lifting"],
+            "progression": "Pause at the bottom, then add weight"
+          },
+          {
+            "id": "dead_hang", "name": "Dead Hang", "mode": "time", "sets": 3, "secs": 30,
+            "bodyweight": true, "rest": 90,
+            "cue": "Shoulders active, not shrugged",
+            "steps": ["Overhand grip, arms straight", "Come down before grip fully fails"],
+            "watchFor": ["Swinging"],
+            "progression": "Mixed grip when grip caps you"
+          }
+        ]
+      }
+    ]
+  }
+}
