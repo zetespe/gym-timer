@@ -37,9 +37,13 @@ dashboard at https://gymmy.goatcounter.com:
   existing phone as an install.
 
 Like any web request, a count reaches GoatCounter with the phone's IP
-address and browser headers. GoatCounter doesn't store the IP; it keeps
-only totals of browser, operating system, screen size, language and
-country. Those can be turned off in the GoatCounter site settings.
+address and browser headers. GoatCounter doesn't store the IP. It keeps
+each count as a separate record with its time, browser and OS version,
+screen width (About page only) and country (plus region for a few
+countries), but with no ID and no session, so records aren't linked to
+each other; the dashboard shows totals. Which of these are collected, and
+how long records are kept (forever by default), is set in the GoatCounter
+site settings.
 
 ## Install on your phone
 
