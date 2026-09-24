@@ -10,7 +10,7 @@ export const SCHEMA = 3;
 export function emptyState() {
   return {
     version: SCHEMA,
-    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4, rest: 0, perSet: 2 }, lastBackupAt: null, sessionsSinceBackup: 0 },
+    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4, rest: 0, perSet: 2 }, lastBackupAt: null, sessionsSinceBackup: 0, usageCount: true, usageSent: {} },
     plan: { name: "", loadNote: "", rules: [], stopRules: [], workouts: [] },
     sessions: [],
     draft: null,

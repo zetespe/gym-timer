@@ -8,7 +8,7 @@ Gymmy is a gym PWA (repo `gym-timer`) that works fully offline after first load:
   countdown beeps after each ticked set; a next-weight suggestion follows the
   double-progression rule (top of the range → up, below the bottom twice →
   down). Backups go wherever you choose via the share sheet or a save dialog.
-  Nothing is ever uploaded; the repo ships no plan and no personal data.
+  Training data is never uploaded; the repo ships no plan and no personal data.
 - **Timer** — the original hold/swap rep timer with beeps and voice cues, wake
   lock, pocket mode. Timed exercises in a session open it preset and write the
   result back.
@@ -18,6 +18,21 @@ copy/paste from the Backup tab; the format is in `docs/AI-PROTOCOL.md`.
 
 **Live app:** https://zetespe.github.io/gym-timer/
 **About page:** https://zetespe.github.io/gym-timer/about/
+
+## Privacy and what is counted
+
+Everything a user records stays in their phone's local storage. To know
+whether anyone uses Gymmy, two anonymous counts go to
+[GoatCounter](https://www.goatcounter.com) (no cookies, no personal data),
+dashboard at https://gymmy.goatcounter.com:
+
+- **Page views** of the About page (`public/about/`).
+- **App use** from `src/log/usage.js`: each phone sends at most one
+  `/app/day` per day, `/app/week` per ISO week, `/app/month/new` or
+  `/app/month/returning` per month, and `/app/install` once ever. A period's
+  total is the number of different phones in it; no identifier is sent.
+  Users can switch this off in Plan → Settings. The first month after this
+  shipped counts every existing phone as an install.
 
 ## Install on your phone
 

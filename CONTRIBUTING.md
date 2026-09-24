@@ -13,8 +13,11 @@ welcome under the rules below.
    the maintainer — `main` auto-deploys to the live app, so every PR is
    reviewed and tested before it ships.
 3. **Keep it simple and privacy-first.** No servers, no accounts, no
-   analytics, no external calls. Everything stays on the user's device.
-   PRs that add tracking or network dependencies will be declined.
+   cookies. Everything the user records stays on their device. The only
+   network use is the anonymous, switch-off-able usage count described in
+   the README (GoatCounter; `src/log/usage.js`). PRs that identify users,
+   send any training data, or add other tracking or network dependencies
+   will be declined.
 4. **Match the codebase.** Plain React + Vite, no new frameworks or heavy
    dependencies without prior discussion. Run `npm run lint`, `npm test`
    and `npm run build` before opening the PR; add tests for logic changes

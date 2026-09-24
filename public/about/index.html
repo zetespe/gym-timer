@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>About Gymmy</title>
-  <meta name="description" content="Gymmy is a free, privacy-first workout log and rep timer. No account, no server, no tracking — your training data never leaves your phone." />
+  <meta name="description" content="Gymmy is a free, privacy-first workout log and rep timer. No account, no cookies, no personal tracking — your training data never leaves your phone." />
   <meta name="theme-color" content="#000000" />
   <link rel="icon" type="image/png" href="../icon-192.png" />
   <style>
@@ -36,7 +36,7 @@
 </head>
 <body>
 <main>
-  <div class="tag">FREE · OFFLINE · NO ACCOUNT · NO TRACKING</div>
+  <div class="tag">FREE · OFFLINE · NO ACCOUNT · NO PERSONAL TRACKING</div>
   <h1>Gymmy</h1>
   <p class="muted">A workout log and rep timer that lives on your phone — and only on your phone.</p>
 
@@ -47,9 +47,16 @@
   <p>Gymmy is a web app you install from your browser. After the first load it
   runs entirely on your device: your plan, every logged set, every note is
   stored in the phone's local storage. There is <b>no account, no cloud, no
-  analytics, no cookies, and no server that could see your data</b> — the
-  hosting only hands your phone the app code. If you're offline in a basement
-  gym, everything still works.</p>
+  cookies, and no server that could see your data</b> — the hosting only hands
+  your phone the app code. If you're offline in a basement gym, everything
+  still works.</p>
+  <p><b>What is counted, and only this:</b> to know whether anyone uses Gymmy,
+  visits to this page are counted, and the app sends one anonymous “opened
+  today / this week / this month” signal plus a single “first use” signal.
+  They go to <a href="https://www.goatcounter.com">GoatCounter</a>, a
+  privacy-friendly counter without cookies. They carry no ID and none of your
+  training data, and only ever add up to totals. You can switch the app's
+  count off in Plan → Settings.</p>
   <p>The flip side, stated honestly: <b>your data exists in exactly one
   place</b>. The Backup tab exports everything to a single file you keep
   wherever you choose (Files, iCloud, AirDrop) — backing up is your job, and
@@ -93,7 +100,9 @@
   license — <a href="https://github.com/zetespe/gym-timer/issues">open an issue</a>
   to talk.</p>
 
-  <footer>Gymmy · built by <a href="https://github.com/zetespe">zetespe</a> · your data never leaves your phone.</footer>
+  <footer>Gymmy · built by <a href="https://github.com/zetespe">zetespe</a> · your training data never leaves your phone.</footer>
 </main>
+<!-- Anonymous page-view count (GoatCounter: no cookies, no personal data). -->
+<script data-goatcounter="https://gymmy.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
