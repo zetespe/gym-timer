@@ -347,11 +347,14 @@ export default function GymTimer({ preset, onResult } = {}) {
       {!isRunning && (
         <div
           style={{
-            display: "flex",
-            gap: "32px",
-            marginBottom: "36px",
-            flexWrap: "wrap",
+            // Fixed 2×2 grid: two controls side by side, two underneath, at
+            // any phone width — a wrapping flex row stacked them vertically.
+            display: "grid",
+            gridTemplateColumns: "repeat(2, max-content)",
+            columnGap: "24px",
+            rowGap: "28px",
             justifyContent: "center",
+            marginBottom: "36px",
           }}
         >
           <SettingControl
@@ -384,9 +387,10 @@ export default function GymTimer({ preset, onResult } = {}) {
             step={5}
             color="#64A8FF"
           />
-          {/* Always rendered, hidden when unused, so turning REST on doesn't
-              shift REST's own buttons out from under a press-and-hold. */}
-          <div style={{ visibility: usesSets ? "visible" : "hidden" }} aria-hidden={!usesSets}>
+          {/* Always rendered as a "ghost" when unused: the 2×2 stays symmetric,
+              nothing shifts out from under a press-and-hold when REST toggles,
+              and the dimmed control hints that REST unlocks it. */}
+          <div style={{ opacity: usesSets ? 1 : 0.32, pointerEvents: usesSets ? "auto" : "none", transition: "opacity 0.3s ease" }} aria-disabled={!usesSets}>
             <SettingControl
               label="HOLDS / SET"
               unit=""
@@ -540,12 +544,14 @@ function SettingControl({ label, unit, value, onChange, min, max, step, color })
       >
         {label}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <button {...down} style={smallBtnStyle}>
           −
         </button>
-        {/* Fixed width: the number growing (0 → 115) must not slide the buttons. */}
-        <div style={{ minWidth: "92px", textAlign: "center", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+        {/* Fixed width: the number growing (0 → 300) must not slide the buttons.
+            72px fits the widest value ("300 sec") and keeps two controls per row
+            on a 390px phone. */}
+        <div style={{ minWidth: "72px", textAlign: "center", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
           <span style={{ fontSize: "28px", fontWeight: 700, color: "#FFF" }}>{value}</span>
           <span style={{ fontSize: "11px", color: "#666", marginLeft: "4px" }}>{unit}</span>
         </div>
