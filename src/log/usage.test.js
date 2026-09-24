@@ -23,7 +23,7 @@ describe("period keys", () => {
 describe("duePings", () => {
   const paths = (sent, now) => duePings(sent, now).map((p) => p.path);
   it("a phone's first open sends install, day, week and a new month", () => {
-    expect(paths({}, D(2026, 9, 24))).toEqual(["/app/install", "/app/day", "/app/week", "/app/month/new"]);
+    expect(paths({}, D(2026, 9, 24))).toEqual(["app/install", "app/day", "app/week", "app/month/new"]);
     expect(paths(undefined, D(2026, 9, 24))).toHaveLength(4);
   });
   it("a second open the same day sends nothing", () => {
@@ -32,24 +32,25 @@ describe("duePings", () => {
   });
   it("the next day in the same week sends only the day", () => {
     const sent = { install: true, day: "2026-09-24", week: "2026-W39", month: "2026-09" };
-    expect(paths(sent, D(2026, 9, 25))).toEqual(["/app/day"]);
+    expect(paths(sent, D(2026, 9, 25))).toEqual(["app/day"]);
   });
   it("a new month right after a used month counts as returning", () => {
     const sent = { install: true, day: "2026-09-30", week: "2026-W40", month: "2026-09" };
-    expect(paths(sent, D(2026, 10, 2))).toEqual(["/app/day", "/app/month/returning"]);
+    expect(paths(sent, D(2026, 10, 2))).toEqual(["app/day", "app/month/returning"]);
   });
   it("a month after a gap counts as new, not returning", () => {
     const sent = { install: true, day: "2026-08-10", week: "2026-W33", month: "2026-08" };
-    expect(paths(sent, D(2026, 10, 2))).toEqual(["/app/day", "/app/week", "/app/month/new"]);
+    expect(paths(sent, D(2026, 10, 2))).toEqual(["app/day", "app/week", "app/month/new"]);
   });
 });
 
 describe("pingUrl", () => {
   it("sends only the event path and title, as an event, with no identifier", () => {
-    const u = new URL(pingUrl({ path: "/app/day", title: "Used today" }));
+    const u = new URL(pingUrl({ path: "app/day", title: "Used today" }));
     expect(u.origin + u.pathname).toBe("https://gymmy.goatcounter.com/count");
-    expect(u.searchParams.get("p")).toBe("/app/day");
+    expect(u.searchParams.get("p")).toBe("app/day");
     expect(u.searchParams.get("e")).toBe("true");
-    expect([...u.searchParams.keys()].sort()).toEqual(["e", "p", "rnd", "t"]);
+    expect(u.searchParams.get("ns")).toBe("1"); // no GoatCounter sessions: every phone counts, hits stay unlinked
+    expect([...u.searchParams.keys()].sort()).toEqual(["e", "ns", "p", "rnd", "t"]);
   });
 });

@@ -195,8 +195,13 @@ export function useLog() {
 }
 
 export function resetAll() {
+  // "Erase everything" wipes the log, not the usage-count choice: an opt-out
+  // must survive, and periods already counted must not be counted again.
+  const keep = state && state.settings ? { usageCount: state.settings.usageCount, usageSent: state.settings.usageSent } : {};
   try { localStorage.removeItem(KEY); } catch (e) {}
   state = emptyState();
+  Object.assign(state.settings, keep);
+  persist();
   listeners.forEach((l) => l());
 }
 

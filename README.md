@@ -28,11 +28,18 @@ dashboard at https://gymmy.goatcounter.com:
 
 - **Page views** of the About page (`public/about/`).
 - **App use** from `src/log/usage.js`: each phone sends at most one
-  `/app/day` per day, `/app/week` per ISO week, `/app/month/new` or
-  `/app/month/returning` per month, and `/app/install` once ever. A period's
-  total is the number of different phones in it; no identifier is sent.
-  Users can switch this off in Plan → Settings. The first month after this
-  shipped counts every existing phone as an install.
+  `app/day` event per day, `app/week` per ISO week, `app/month/new` or
+  `app/month/returning` per month, and `app/install` once ever. Events are
+  sent with GoatCounter sessions off (`ns=1`), so a period's total is the
+  number of different phones in it and hits are never linked; no identifier
+  is sent. Users can switch this off in Plan → Settings; "Erase everything"
+  keeps that choice. The first month after this shipped counts every
+  existing phone as an install.
+
+Like any web request, a count reaches GoatCounter with the phone's IP
+address and browser headers. GoatCounter doesn't store the IP; it keeps
+only totals of browser, operating system, screen size, language and
+country. Those can be turned off in the GoatCounter site settings.
 
 ## Install on your phone
 

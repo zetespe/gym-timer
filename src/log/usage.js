@@ -1,10 +1,14 @@
 // Anonymous usage counts, sent to GoatCounter (https://gymmy.goatcounter.com).
 //
 // Each phone sends at most:
-//   /app/day                  once per calendar day it is opened
-//   /app/week                 once per ISO week
-//   /app/month/new|returning  once per month; "returning" if it also counted last month
-//   /app/install              once ever (first open with counting on)
+//   app/day                  once per calendar day it is opened
+//   app/week                 once per ISO week
+//   app/month/new|returning  once per month; "returning" if it also counted last month
+//   app/install              once ever (first open with counting on)
+// Event names have no leading "/" (GoatCounter strips it and its docs forbid it).
+// `ns=1` turns off GoatCounter's 8-hour sessions: without it, hits from the same
+// browser + network are merged, so phones on one gym Wi-Fi would count as one
+// and hits would be linked together. The app already dedupes per period.
 // Adding up a period's count gives how many different phones used Gymmy in it,
 // without any identifier: the phone only remembers which periods it already
 // counted. No training data, no ID, no cookies. Users can switch it off in
@@ -33,19 +37,19 @@ export function weekKey(d) {
 export function duePings(sent, now) {
   const s = sent || {};
   const due = [];
-  if (!s.install) due.push({ key: "install", value: true, path: "/app/install", title: "First use" });
+  if (!s.install) due.push({ key: "install", value: true, path: "app/install", title: "First use" });
   const day = dayKey(now), week = weekKey(now), month = monthKey(now);
-  if (s.day !== day) due.push({ key: "day", value: day, path: "/app/day", title: "Used today" });
-  if (s.week !== week) due.push({ key: "week", value: week, path: "/app/week", title: "Used this week" });
+  if (s.day !== day) due.push({ key: "day", value: day, path: "app/day", title: "Used today" });
+  if (s.week !== week) due.push({ key: "week", value: week, path: "app/week", title: "Used this week" });
   if (s.month !== month) {
     const back = s.month === prevMonthKey(now);
-    due.push({ key: "month", value: month, path: back ? "/app/month/returning" : "/app/month/new", title: back ? "Used this month, also last month" : "Used this month, not last month" });
+    due.push({ key: "month", value: month, path: back ? "app/month/returning" : "app/month/new", title: back ? "Used this month, also last month" : "Used this month, not last month" });
   }
   return due;
 }
 
 export function pingUrl(p) {
-  return `${COUNT_URL}?p=${encodeURIComponent(p.path)}&t=${encodeURIComponent(p.title)}&e=true&rnd=${Math.random().toString(36).slice(2)}`;
+  return `${COUNT_URL}?p=${encodeURIComponent(p.path)}&t=${encodeURIComponent(p.title)}&e=true&ns=1&rnd=${Math.random().toString(36).slice(2)}`;
 }
 
 function allowed() {
@@ -65,6 +69,7 @@ export async function maybeCountUsage(now = new Date()) {
   inFlight = true;
   try {
     for (const p of due) {
+      if (getState().settings.usageCount === false) break; // switched off mid-way
       try {
         await fetch(pingUrl(p), { mode: "no-cors", cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", keepalive: true });
       } catch {
