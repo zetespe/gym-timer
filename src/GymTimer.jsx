@@ -179,7 +179,7 @@ export default function GymTimer({ preset, onResult } = {}) {
 
   const phaseLabel =
     phase === PHASE_HOLD
-      ? "HOLD"
+      ? "WORK"
       : phase === PHASE_SWAP
       ? "SWITCH"
       : phase === PHASE_COUNTDOWN
@@ -358,7 +358,7 @@ export default function GymTimer({ preset, onResult } = {}) {
           }}
         >
           <SettingControl
-            label="HOLD"
+            label="WORK"
             unit="sec"
             value={holdTime}
             onChange={setHoldTime}
