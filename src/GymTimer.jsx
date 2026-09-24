@@ -392,7 +392,7 @@ export default function GymTimer({ preset, onResult } = {}) {
               and the dimmed control hints that REST unlocks it. */}
           <div style={{ opacity: usesSets ? 1 : 0.32, pointerEvents: usesSets ? "auto" : "none", transition: "opacity 0.3s ease" }} aria-disabled={!usesSets}>
             <SettingControl
-              label="HOLDS / SET"
+              label="PER SET"
               unit=""
               value={perSet}
               onChange={setPerSet}
