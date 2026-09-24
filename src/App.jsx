@@ -8,6 +8,7 @@ import Exercise from "./log/Exercise";
 import Backup from "./log/Backup";
 import { Toaster } from "./log/ui";
 import { useLog, requestPersistence } from "./log/store";
+import { maybeCountUsage } from "./log/usage";
 import "./log/log.css";
 
 const TABS = [
@@ -24,6 +25,14 @@ function App() {
   const [params, setParams] = useState(null);
   const [justFinished, setJustFinished] = useState(null);
   useEffect(() => { requestPersistence(); }, []);
+  // Anonymous usage count (see src/log/usage.js). An installed app can stay
+  // alive for days, so count again whenever it returns to the foreground.
+  useEffect(() => {
+    maybeCountUsage();
+    const onVis = () => { if (document.visibilityState === "visible") maybeCountUsage(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
   useEffect(() => {
     // Strip "?params" the same way the initial-state read does, and drop any
     // stale params from a previous in-app navigation.

@@ -8,7 +8,7 @@ Gymmy is a gym PWA (repo `gym-timer`) that works fully offline after first load:
   countdown beeps after each ticked set; a next-weight suggestion follows the
   double-progression rule (top of the range → up, below the bottom twice →
   down). Backups go wherever you choose via the share sheet or a save dialog.
-  Nothing is ever uploaded; the repo ships no plan and no personal data.
+  Training data is never uploaded; the repo ships no plan and no personal data.
 - **Timer** — the original hold/swap rep timer with beeps and voice cues, wake
   lock, pocket mode. Timed exercises in a session open it preset and write the
   result back.
@@ -18,6 +18,34 @@ copy/paste from the Backup tab; the format is in `docs/AI-PROTOCOL.md`.
 
 **Live app:** https://zetespe.github.io/gym-timer/
 **About page:** https://zetespe.github.io/gym-timer/about/
+
+## Privacy and what is counted
+
+Everything a user records stays in their phone's local storage. To know
+whether anyone uses Gymmy, two anonymous counts go to
+[GoatCounter](https://www.goatcounter.com) (no cookies, no personal data stored),
+dashboard at https://gymmy.goatcounter.com:
+
+- **Page views** of the About page (`public/about/`).
+- **App use** from `src/log/usage.js`: each phone sends at most one
+  `app/day` event per day, `app/week` per ISO week, `app/month/new` or
+  `app/month/returning` per month, and `app/install` once ever. Events are
+  sent with GoatCounter sessions off (`ns=1`), so a period's total is the
+  number of different phones in it and hits are never linked; no identifier
+  is sent. Users can switch this off in Plan → Settings; "Erase everything"
+  keeps that choice. The first month after this shipped counts every
+  existing phone as an install.
+
+Like any web request, a count reaches GoatCounter with the phone's IP
+address and browser headers. GoatCounter doesn't store the IP. It keeps
+each count as a separate record with its time, browser and OS version and
+country (plus region for a few countries); About page views also record the
+screen width and the page that linked there. App counts carry no ID and no
+session, so they aren't linked to each other. About page views use
+GoatCounter's standard 8-hour visit session, a random ID stored with the
+record so a reload isn't counted twice. The dashboard shows totals. Which
+of these are collected, and how long records are kept (forever by
+default), is set in the GoatCounter site settings.
 
 ## Install on your phone
 

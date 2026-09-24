@@ -65,9 +65,11 @@ export default function Plan({ params, go }) {
       <h2>Settings</h2>
       <div className="row"><span className="grow">Weight unit</span><select className="text" style={{ width: "auto" }} value={S.settings.unit} onChange={(e) => patch((s) => { s.settings.unit = e.target.value; })}><option value="kg">kg</option><option value="lb">lb</option></select></div>
       <div className="row" style={{ marginTop: 8 }}><span className="grow">Rest countdown after each set</span><input type="checkbox" checked={!!S.settings.restTimer} onChange={(e) => patch((s) => { s.settings.restTimer = e.target.checked; })} style={{ width: 24, height: 24 }} /></div>
+      <div className="row" style={{ marginTop: 8 }}><span className="grow">Anonymous usage count</span><input type="checkbox" checked={S.settings.usageCount !== false} onChange={(e) => patch((s) => { s.settings.usageCount = e.target.checked; })} style={{ width: 24, height: 24 }} aria-label="Anonymous usage count" /></div>
+      <p className="muted small" style={{ marginTop: 4 }}>Tells the maker how many phones use Gymmy: one anonymous “opened today / this week / this month” count and one “first use” count. No ID and none of your training data. Turn it off any time.</p>
       <h2>Danger zone</h2>
       <button className="btn ghost danger" onClick={() => { if (confirm("Erase the plan AND every session on this phone? Save a backup first.")) { resetAll(); go("today"); } }}>Erase everything</button>
-      <p className="muted small" style={{ marginTop: 24 }}><a className="link" href={import.meta.env.BASE_URL + "about/"} target="_blank" rel="noreferrer">About Gymmy</a> · free for personal use · your data never leaves your phone</p>
+      <p className="muted small" style={{ marginTop: 24 }}><a className="link" href={import.meta.env.BASE_URL + "about/"} target="_blank" rel="noreferrer">About Gymmy</a> · free for personal use · your training data never leaves your phone</p>
     </div>
   );
 }

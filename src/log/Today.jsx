@@ -44,7 +44,7 @@ export default function Today({ go, justFinished }) {
     return (
       <div className="page">
         <h1>Gymmy</h1>
-        <p className="muted">Everything you record stays on this phone. Nothing is uploaded anywhere.</p>
+        <p className="muted">Everything you record stays on this phone and is never uploaded. Gymmy only sends an anonymous “app opened” count, which you can switch off in Plan → Settings.</p>
         <h2>Start with a plan</h2>
         <button className="big primary" onClick={() => go("plan", { edit: "new" })}><strong>Build a plan</strong><span>Add workouts and exercises by hand.</span></button>
         <button className="big" onClick={() => go("plan", { paste: true })}><strong>Paste a plan</strong><span>From Notion, a coach, or an AI chat. Lines like “Goblet Squat 3x8-10 16kg”.</span></button>

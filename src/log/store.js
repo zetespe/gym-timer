@@ -10,7 +10,7 @@ export const SCHEMA = 3;
 export function emptyState() {
   return {
     version: SCHEMA,
-    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4, rest: 0, perSet: 2 }, lastBackupAt: null, sessionsSinceBackup: 0 },
+    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4, rest: 0, perSet: 2 }, lastBackupAt: null, sessionsSinceBackup: 0, usageCount: true, usageSent: {} },
     plan: { name: "", loadNote: "", rules: [], stopRules: [], workouts: [] },
     sessions: [],
     draft: null,
@@ -195,8 +195,13 @@ export function useLog() {
 }
 
 export function resetAll() {
+  // "Erase everything" wipes the log, not the usage-count choice: an opt-out
+  // must survive, and periods already counted must not be counted again.
+  const keep = state && state.settings ? { usageCount: state.settings.usageCount, usageSent: state.settings.usageSent } : {};
   try { localStorage.removeItem(KEY); } catch (e) {}
   state = emptyState();
+  Object.assign(state.settings, keep);
+  persist();
   listeners.forEach((l) => l());
 }
 
