@@ -14,8 +14,9 @@ welcome under the rules below.
    reviewed and tested before it ships.
 3. **Keep it simple and privacy-first.** No servers, no accounts, no
    cookies. Everything the user records stays on their device. The only
-   network use is the anonymous, switch-off-able usage count described in
-   the README (GoatCounter; `src/log/usage.js`). PRs that identify users,
+   network use is the anonymous counting described in the README
+   (GoatCounter): About page views, and the app's switch-off-able usage
+   count (`src/log/usage.js`). PRs that identify users,
    send any training data, or add other tracking or network dependencies
    will be declined.
 4. **Match the codebase.** Plain React + Vite, no new frameworks or heavy

@@ -23,7 +23,7 @@ copy/paste from the Backup tab; the format is in `docs/AI-PROTOCOL.md`.
 
 Everything a user records stays in their phone's local storage. To know
 whether anyone uses Gymmy, two anonymous counts go to
-[GoatCounter](https://www.goatcounter.com) (no cookies, no personal data),
+[GoatCounter](https://www.goatcounter.com) (no cookies, no personal data stored),
 dashboard at https://gymmy.goatcounter.com:
 
 - **Page views** of the About page (`public/about/`).
@@ -38,12 +38,14 @@ dashboard at https://gymmy.goatcounter.com:
 
 Like any web request, a count reaches GoatCounter with the phone's IP
 address and browser headers. GoatCounter doesn't store the IP. It keeps
-each count as a separate record with its time, browser and OS version,
-screen width (About page only) and country (plus region for a few
-countries), but with no ID and no session, so records aren't linked to
-each other; the dashboard shows totals. Which of these are collected, and
-how long records are kept (forever by default), is set in the GoatCounter
-site settings.
+each count as a separate record with its time, browser and OS version and
+country (plus region for a few countries); About page views also record the
+screen width and the page that linked there. App counts carry no ID and no
+session, so they aren't linked to each other. About page views use
+GoatCounter's standard 8-hour visit session, a random ID stored with the
+record so a reload isn't counted twice. The dashboard shows totals. Which
+of these are collected, and how long records are kept (forever by
+default), is set in the GoatCounter site settings.
 
 ## Install on your phone
 
