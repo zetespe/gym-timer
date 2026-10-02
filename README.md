@@ -47,6 +47,10 @@ record so a reload isn't counted twice. The dashboard shows totals. Which
 of these are collected, and how long records are kept (forever by
 default), is set in the GoatCounter site settings.
 
+> **A personal note:** if you use Gymmy, please leave the usage count on.
+> Seeing that real people use and love the app is what keeps me motivated
+> to keep maintaining it. Thank you!
+
 ## Install on your phone
 
 - **iOS (Safari):** open the URL → Share → Add to Home Screen.
