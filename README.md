@@ -36,6 +36,10 @@ dashboard at https://gymmy.goatcounter.com:
   keeps that choice. The first month after this shipped counts every
   existing phone as an install.
 
+> **A personal note:** if you use Gymmy, please leave the usage count on.
+> Seeing that real people use and love the app is what keeps me motivated
+> to keep maintaining it. Thank you!
+
 Like any web request, a count reaches GoatCounter with the phone's IP
 address and browser headers. GoatCounter doesn't store the IP. It keeps
 each count as a separate record with its time, browser and OS version and
