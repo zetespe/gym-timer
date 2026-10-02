@@ -10,7 +10,7 @@ export const SCHEMA = 3;
 export function emptyState() {
   return {
     version: SCHEMA,
-    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4, rest: 0, perSet: 2 }, lastBackupAt: null, sessionsSinceBackup: 0, usageCount: true, usageSent: {} },
+    settings: { unit: "kg", restTimer: true, timer: { hold: 20, swap: 4, rest: 0, perSet: 2 }, lastBackupAt: null, sessionsSinceBackup: 0, usageSent: {} },
     plan: { name: "", loadNote: "", rules: [], stopRules: [], workouts: [] },
     sessions: [],
     draft: null,
@@ -43,6 +43,7 @@ export function migrate(raw) {
   s.version = SCHEMA;
   s.settings = Object.assign(emptyState().settings, s.settings || {});
   s.settings.timer = Object.assign(emptyState().settings.timer, s.settings.timer || {});
+  delete s.settings.usageCount; // the opt-out switch was removed; counting is always on
   s.plan = s.plan || { name: "", workouts: [] };
   s.plan.loadNote = s.plan.loadNote || "";
   s.plan.rules = strList(s.plan.rules);
@@ -195,9 +196,9 @@ export function useLog() {
 }
 
 export function resetAll() {
-  // "Erase everything" wipes the log, not the usage-count choice: an opt-out
-  // must survive, and periods already counted must not be counted again.
-  const keep = state && state.settings ? { usageCount: state.settings.usageCount, usageSent: state.settings.usageSent } : {};
+  // "Erase everything" wipes the log but remembers which periods were already
+  // counted, so the same phone isn't counted again as a new install.
+  const keep = state && state.settings ? { usageSent: state.settings.usageSent } : {};
   try { localStorage.removeItem(KEY); } catch (e) {}
   state = emptyState();
   Object.assign(state.settings, keep);

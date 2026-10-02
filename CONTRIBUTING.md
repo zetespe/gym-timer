@@ -15,7 +15,7 @@ welcome under the rules below.
 3. **Keep it simple and privacy-first.** No servers, no accounts, no
    cookies. Everything the user records stays on their device. The only
    network use is the anonymous counting described in the README
-   (GoatCounter): About page views, and the app's switch-off-able usage
+   (GoatCounter): About page views, and the app's anonymous usage
    count (`src/log/usage.js`). PRs that identify users,
    send any training data, or add other tracking or network dependencies
    will be declined.

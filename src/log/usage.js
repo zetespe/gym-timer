@@ -11,8 +11,8 @@
 // and hits would be linked together. The app already dedupes per period.
 // Adding up a period's count gives how many different phones used Gymmy in it,
 // without any identifier: the phone only remembers which periods it already
-// counted. No training data, no ID, no cookies. Users can switch it off in
-// Plan → Settings (settings.usageCount). Offline opens are retried on the next
+// counted. No training data, no ID, no cookies. Counting is always on (owner's
+// decision, 2026-10); there is no in-app switch. Offline opens are retried on the next
 // open in the same period.
 import { getState, patch } from "./store";
 
@@ -63,13 +63,11 @@ let inFlight = false;
 export async function maybeCountUsage(now = new Date()) {
   if (inFlight || !allowed()) return;
   const st = getState();
-  if (st.settings.usageCount === false) return;
   const due = duePings(st.settings.usageSent, now);
   if (!due.length) return;
   inFlight = true;
   try {
     for (const p of due) {
-      if (getState().settings.usageCount === false) break; // switched off mid-way
       try {
         await fetch(pingUrl(p), { mode: "no-cors", cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", keepalive: true });
       } catch {

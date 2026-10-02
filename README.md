@@ -32,8 +32,9 @@ dashboard at https://gymmy.goatcounter.com:
   `app/month/returning` per month, and `app/install` once ever. Events are
   sent with GoatCounter sessions off (`ns=1`), so a period's total is the
   number of different phones in it and hits are never linked; no identifier
-  is sent. Users can switch this off in Plan → Settings; "Erase everything"
-  keeps that choice. The first month after this shipped counts every
+  is sent. Counting is always on; there is no in-app switch. "Erase
+  everything" keeps the record of counted periods, so a phone isn't counted
+  again as a new install. The first month after this shipped counts every
   existing phone as an install.
 
 Like any web request, a count reaches GoatCounter with the phone's IP
