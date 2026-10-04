@@ -51,8 +51,9 @@ export function Dialog() {
         <h3 id="dlg-title">{d.title}</h3>
         {d.text && <p>{d.text}</p>}
         {d.input && <input className="text" autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder={d.input.placeholder} enterKeyHint="next" autoComplete="off" autoCapitalize="words" />}
-        {/* Side by side: safe button left. Stacked lists: safe button last. */}
-        <div className={"dlg-btns" + (d.stack ? " stack" : "")}>{d.stack ? [...actions, back] : [back, ...actions]}</div>
+        {/* A red button goes left, so the thumb's easy reach on the right is the
+            safe choice. Stacked lists: safe button last. */}
+        <div className={"dlg-btns" + (d.stack ? " stack" : "")}>{d.stack || d.buttons.some((b) => b.kind === "danger") ? [...actions, back] : [back, ...actions]}</div>
       </form>
     </div>
   );
