@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLog, patch, setState, getState, slug } from "./store";
-import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, findExercise } from "./model";
-import { Stepper, toast } from "./ui";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises } from "./model";
+import { Stepper, toast, ask, confirmAction } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
 import Technique from "./Technique";
@@ -73,21 +73,38 @@ export default function Session({ onFinished, onExit }) {
     toast("✓ " + ex.name + ": " + fmtEntry(ex, unit) + (r.note ? " · “" + r.note + "”" : ""), 3500);
   };
 
-  const addExercise = () => {
-    const name = prompt("Exercise name:"); if (!name) return;
+  // One question at a time; Back returns to the previous question.
+  const addExercise = async () => {
     const pool = allExercises(S);
-    let x = pool.find((p) => p.name.toLowerCase() === name.trim().toLowerCase()) || findExercise(name, pool);
-    if (!x || !confirm(`Use "${x.name}"?`)) {
-      const mode = (prompt("Measured in: reps, time (seconds) or dist (metres)?", "reps") || "reps").toLowerCase();
-      x = { id: slug(name), name: name.trim(), mode: ["time", "dist"].includes(mode) ? mode : "reps", bodyweight: confirm("Bodyweight only (no weight field)?"), perSide: false, sets: 3, repsMin: 8, repsMax: 8, weight: 0, rest: 90 };
+    let step = "name", name = "", matches = [], mode = "reps", x = null;
+    while (!x) {
+      if (step === "name") {
+        const v = await ask({ title: "Exercise name", input: { value: name, placeholder: "e.g. Goblet squat" }, buttons: [{ label: "Next", kind: "primary" }], back: "Cancel" });
+        if (v == null) return;
+        name = v;
+        x = pool.find((p) => p.name.toLowerCase() === name.toLowerCase());
+        matches = x ? [] : matchExercises(name, pool);
+        step = matches.length ? "pick" : "mode";
+      } else if (step === "pick") {
+        const v = await ask({ title: "Which one?", buttons: [...matches.map((m) => ({ label: m.name, value: m })), { label: `+ New: “${name}”`, value: "new" }], back: "Back", stack: true });
+        if (v == null) step = "name"; else if (v === "new") step = "mode"; else x = v;
+      } else if (step === "mode") {
+        const v = await ask({ title: "Measured in?", buttons: [{ label: "Reps", value: "reps" }, { label: "Time", value: "time" }, { label: "Distance", value: "dist" }], back: "Back", stack: true });
+        if (v == null) step = matches.length ? "pick" : "name"; else { mode = v; step = "weight"; }
+      } else {
+        const v = await ask({ title: "Weights or bodyweight?", buttons: [{ label: "Weights", value: false }, { label: "Bodyweight", value: true }], back: "Back", stack: true });
+        if (v == null) step = "mode";
+        else x = { id: slug(name), name, mode, bodyweight: v, perSide: false, sets: 3, repsMin: 8, repsMax: 8, weight: 0, rest: 90 };
+      }
     }
-    const e = newEntry(S, Object.assign({ sets: 3, repsMin: 8, repsMax: 8, rest: 90 }, x));
+    // State may have moved on while the questions were open.
+    const e = newEntry(getState(), Object.assign({ sets: 3, repsMin: 8, repsMax: 8, rest: 90 }, x));
     mut((dr) => { dr.exercises.push(e); });
   };
 
-  const finish = () => {
+  const finish = async () => {
     const out = finalizeDraft(d);
-    if (!out.exercises.length) { if (confirm("Nothing ticked yet. Discard this session?")) { setState((s) => ({ ...s, draft: null })); onExit(); } return; }
+    if (!out.exercises.length) { if (await confirmAction("Nothing ticked yet", "Discard this session?", "Discard", "Keep going")) { setState((s) => ({ ...s, draft: null })); onExit(); } return; }
     setState((s) => ({ ...s, sessions: [...s.sessions, out], draft: null, settings: { ...s.settings, sessionsSinceBackup: (s.settings.sessionsSinceBackup || 0) + 1 } }));
     onFinished(out.id);
   };
@@ -127,7 +144,7 @@ export default function Session({ onFinished, onExit }) {
               <button className="btn sm" onClick={() => mut((dr) => { const ss = dr.exercises[ei].sets; const l = ss[ss.length - 1]; ss.push(l ? { ...l, done: false } : { done: false, w: e.bodyweight ? undefined : 0, [k]: 8 }); })}>+ set</button>
               {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}
               {e.mode === "time" && <button className="btn sm" onClick={() => setTimerFor(ei)}>⏱ Timer</button>}
-              <button className="btn sm ghost danger" onClick={() => { if (confirm("Remove " + e.name + " from this session?")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}>remove</button>
+              <button className="btn sm ghost danger" onClick={async () => { if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}>remove</button>
             </div>
             <textarea rows={1} placeholder="Note (felt easy, bar height, knee…)" value={e.notes || ""} onChange={(ev) => mut((dr) => { dr.exercises[ei].notes = ev.target.value; })} />
           </div>
@@ -151,7 +168,7 @@ export default function Session({ onFinished, onExit }) {
       </div>
       <div className="row" style={{ marginTop: 18 }}>
         <button className="btn primary grow" onClick={finish}>Finish session</button>
-        <button className="btn ghost danger" onClick={() => { if (confirm("Discard this session? Nothing will be saved.")) { setState((s) => ({ ...s, draft: null })); onExit(); } }}>Discard</button>
+        <button className="btn ghost danger" onClick={async () => { if (await confirmAction("Discard this session?", "Nothing will be saved.", "Discard", "Keep going")) { setState((s) => ({ ...s, draft: null })); onExit(); } }}>Discard</button>
       </div>
 
       {rest && (() => {

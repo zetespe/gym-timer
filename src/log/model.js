@@ -153,17 +153,23 @@ export function finalizeDraft(d) {
 }
 
 // ---- quick log: "goblet 16 8 8 7 felt easy" ----
-export function findExercise(text, pool) {
-  const t = text.toLowerCase().replace(/[^a-z0-9 ]/g, " ");
-  let best = null, bestScore = 0;
+// Best matches first. Words of a name found in the text score by length; the
+// text found inside a name ("ben" → Bench Press) scores too.
+export function matchExercises(text, pool, limit = 5) {
+  const clean = (v) => v.toLowerCase().replace(/[^a-z0-9 ]/g, " ");
+  const t = clean(text), typed = t.trim();
+  const scored = [];
   for (const x of pool) {
-    const words = x.name.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2);
+    const name = clean(x.name);
+    const words = name.split(/\s+/).filter((w) => w.length > 2);
     let score = 0;
     for (const w of words) if (t.includes(w.slice(0, Math.min(w.length, 5)))) score += w.length;
-    if (score > bestScore) { bestScore = score; best = x; }
+    if (typed.length > 1 && name.includes(typed)) score += typed.length;
+    if (score > 0) scored.push([x, score]);
   }
-  return bestScore > 0 ? best : null;
+  return scored.sort((a, b) => b[1] - a[1]).slice(0, limit).map((a) => a[0]);
 }
+export function findExercise(text, pool) { return matchExercises(text, pool, 1)[0] || null; }
 const num = (v) => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : null; };
 
 export function parseQuickLog(text, entries, unit = "kg") {

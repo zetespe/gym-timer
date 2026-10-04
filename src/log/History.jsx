@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLog, setState } from "./store";
 import { fmtDate, fmtEntry, sortedSessions, historyFor, allExercises, summaryText } from "./model";
-import { copyText } from "./ui";
+import { copyText, confirmAction } from "./ui";
 
 export default function History() {
   const S = useLog();
@@ -39,7 +39,7 @@ export default function History() {
           {s.notes && <p className="muted small">{s.notes}</p>}
           <div className="ex-actions">
             <button className="btn sm" onClick={() => copyText(summaryText(s, unit), "summary")}>Copy summary</button>
-            <button className="btn sm ghost danger" onClick={() => { if (confirm(`Delete ${s.name} from ${fmtDate(s.date)}?`)) setState((st) => ({ ...st, sessions: st.sessions.filter((x) => x.id !== s.id) })); }}>Delete</button>
+            <button className="btn sm ghost danger" onClick={async () => { if (await confirmAction(`Delete ${s.name} from ${fmtDate(s.date)}?`, "", "Delete")) setState((st) => ({ ...st, sessions: st.sessions.filter((x) => x.id !== s.id) })); }}>Delete</button>
           </div>
         </details>
       ))}
