@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ---- toast (module-level so any helper can call it) ----
 let toastListener = null;
@@ -27,18 +27,21 @@ export const confirmAction = (title, text, yes, no = "Keep") =>
 export function Dialog() {
   const [d, setD] = useState(null);
   const [text, setText] = useState("");
+  const open = useRef(null);
   useEffect(() => {
-    dialogListener = (o) => { setText(o.input ? o.input.value || "" : ""); setD(o); };
+    // One dialog at a time: a second one (e.g. a button reached with Tab under
+    // the backdrop) is refused as if Back was tapped, and the open one stays.
+    dialogListener = (o) => { if (open.current) { o.resolve(null); return; } open.current = o; setText(o.input ? o.input.value || "" : ""); setD(o); };
     return () => { dialogListener = null; };
   }, []);
   useEffect(() => {
     if (!d) return;
-    const onKey = (e) => { if (e.key === "Escape") { d.resolve(null); setD(null); } };
+    const onKey = (e) => { if (e.key === "Escape") { d.resolve(null); open.current = null; setD(null); } };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [d]);
   if (!d) return null;
-  const close = (v) => { d.resolve(v); setD(null); };
+  const close = (v) => { d.resolve(v); open.current = null; setD(null); };
   const typed = text.trim();
   const back = d.back && <button key="back" type="button" className="btn back" autoFocus={!d.input} onClick={() => close(null)}>{d.back}</button>;
   const actions = d.buttons.map((b, i) => d.input
