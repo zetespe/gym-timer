@@ -203,6 +203,9 @@ export default function Session({ onFinished, onExit }) {
               const secs = [...Array.from({ length: reps }, () => hold), ...(partial > 0 ? [partial] : [])];
               if (secs.length) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; const kept = old.filter((s) => s.done); ex.sets = [...kept, ...secs.map((sec, i) => { const o = { done: true, s: sec }; const w = old[kept.length + i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; })]; });
               setTimerFor(null);
+              // The timer runs no rest after the last set, so the rest before
+              // the next exercise starts here, as it does for a manual tick.
+              if (secs.length) startRest(d.exercises[timerFor]);
               if (secs.length) toast(`${secs.join(", ")} s recorded for ${d.exercises[timerFor].name}`);
             }}
           />
