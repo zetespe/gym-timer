@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ---- toast (module-level so any helper can call it) ----
 let toastListener = null;
@@ -11,6 +11,55 @@ export function Toaster() {
     return () => { toastListener = null; clearTimeout(t); };
   }, []);
   return msg ? <div className="toast">{msg}</div> : null;
+}
+
+// ---- dialog (module-level like toast; replaces the browser's white confirm/prompt) ----
+// ask() resolves with the tapped button's value, the typed text for an input
+// dialog, or null for the safe way out: the back button, the backdrop, Escape.
+let dialogListener = null;
+export function ask(opts) {
+  return new Promise((resolve) => { if (dialogListener) dialogListener({ buttons: [], ...opts, resolve }); else resolve(null); });
+}
+// Destructive yes/no: a red action button and a safe one named after what it does.
+export const confirmAction = (title, text, yes, no = "Keep") =>
+  ask({ title, text, buttons: [{ label: yes, value: true, kind: "danger" }], back: no }).then((v) => v === true);
+
+export function Dialog() {
+  const [d, setD] = useState(null);
+  const [text, setText] = useState("");
+  const open = useRef(null);
+  useEffect(() => {
+    // One dialog at a time: a second one (e.g. a button reached with Tab under
+    // the backdrop) is refused as if Back was tapped, and the open one stays.
+    dialogListener = (o) => { if (open.current) { o.resolve(null); return; } open.current = o; setText(o.input ? o.input.value || "" : ""); setD(o); };
+    return () => { dialogListener = null; };
+  }, []);
+  useEffect(() => {
+    if (!d) return;
+    const onKey = (e) => { if (e.key === "Escape") { d.resolve(null); open.current = null; setD(null); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [d]);
+  if (!d) return null;
+  const close = (v) => { d.resolve(v); open.current = null; setD(null); };
+  const typed = text.trim();
+  const back = d.back && <button key="back" type="button" className="btn back" autoFocus={!d.input} onClick={() => close(null)}>{d.back}</button>;
+  const actions = d.buttons.map((b, i) => d.input
+    ? <button key={i} type="submit" className={"btn " + (b.kind || "")} disabled={!typed}>{b.label}</button>
+    : <button key={i} type="button" className={"btn " + (b.kind || "")} onClick={() => close(b.value)}>{b.label}</button>);
+  return (
+    <div className="modal-back" onClick={() => close(null)}>
+      <form className="modal dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => { e.preventDefault(); if (d.input && typed) close(typed); }}>
+        <h3 id="dlg-title">{d.title}</h3>
+        {d.text && <p>{d.text}</p>}
+        {d.input && <input className="text" autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder={d.input.placeholder} enterKeyHint="next" autoComplete="off" autoCapitalize="words" />}
+        {/* A red button goes left, so the thumb's easy reach on the right is the
+            safe choice. Stacked lists: safe button last. */}
+        <div className={"dlg-btns" + (d.stack ? " stack" : "")}>{d.stack || d.buttons.some((b) => b.kind === "danger") ? [...actions, back] : [back, ...actions]}</div>
+      </form>
+    </div>
+  );
 }
 
 export function Stepper({ value, onChange, step = 1, unit, inputMode = "decimal", min = 0 }) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, matchExercises, findExercise } from "./model";
 import { emptyState, migrate, strList } from "./store";
 
 describe("technique fields and training rules", () => {
@@ -248,5 +248,22 @@ describe("draftHasProgress", () => {
     expect(draftHasProgress(d)).toBe(true);
     expect(draftHasProgress(draft({ notes: "tired" }))).toBe(true);
     expect(draftHasProgress(draft({ notes: "   " }))).toBe(false);
+  });
+});
+
+describe("matchExercises", () => {
+  const pool = [{ id: "bench", name: "Bench Press" }, { id: "incline", name: "Incline Bench Press" }, { id: "squat", name: "Goblet Squat" }];
+  it("lists every match, best first, for the add-exercise picker", () => {
+    expect(matchExercises("incline bench", pool).map((x) => x.id)).toEqual(["incline", "bench"]);
+    expect(matchExercises("bench", pool).map((x) => x.id)).toEqual(["bench", "incline"]);
+  });
+  it("finds names from the start of a word", () => {
+    expect(matchExercises("gob", pool).map((x) => x.id)).toEqual(["squat"]);
+  });
+  it("returns nothing for an unknown name", () => {
+    expect(matchExercises("deadlift", pool)).toEqual([]);
+  });
+  it("findExercise keeps picking the single best match", () => {
+    expect(findExercise("goblet 16 8 8 7", pool).id).toBe("squat");
   });
 });

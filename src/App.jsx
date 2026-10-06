@@ -6,7 +6,7 @@ import History from "./log/History";
 import Plan from "./log/Plan";
 import Exercise from "./log/Exercise";
 import Backup from "./log/Backup";
-import { Toaster } from "./log/ui";
+import { Toaster, Dialog } from "./log/ui";
 import { useLog, requestPersistence } from "./log/store";
 import { maybeCountUsage } from "./log/usage";
 import "./log/log.css";
@@ -62,6 +62,7 @@ function App() {
         ))}
       </nav>
       <Toaster />
+      <Dialog />
     </div>
   );
 }

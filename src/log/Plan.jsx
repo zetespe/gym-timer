@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLog, patch, setState, uid, slug, migrateExercise, resetAll } from "./store";
 import { parsePlanText, applyImport, extractJSON, fmtTarget } from "./model";
-import { Field, Stepper, toast } from "./ui";
+import { Field, Stepper, toast, confirmAction } from "./ui";
 
 export default function Plan({ params, go }) {
   const S = useLog();
@@ -43,7 +43,7 @@ export default function Plan({ params, go }) {
             <button className="btn sm ghost" onClick={() => patch((s) => move(s.plan.workouts, i, -1))}>↑</button>
             <button className="btn sm ghost" onClick={() => patch((s) => move(s.plan.workouts, i, 1))}>↓</button>
             <button className="btn sm ghost" onClick={() => patch((s) => { const c = structuredClone(w); c.id = uid(); c.name += " copy"; s.plan.workouts.splice(i + 1, 0, c); })}>Duplicate</button>
-            <button className="btn sm ghost danger" onClick={() => { if (confirm(`Delete ${w.name}? Logged sessions are kept.`)) patch((s) => { s.plan.workouts = s.plan.workouts.filter((x) => x.id !== w.id); }); }}>Delete</button>
+            <button className="btn sm ghost danger" onClick={async () => { if (await confirmAction(`Delete ${w.name}?`, "Logged sessions are kept.", "Delete")) patch((s) => { s.plan.workouts = s.plan.workouts.filter((x) => x.id !== w.id); }); }}>Delete</button>
           </div>
         </div>
       ))}
@@ -69,7 +69,7 @@ export default function Plan({ params, go }) {
       <p className="muted small" style={{ marginTop: 4 }}>Tells the maker how many phones use Gymmy: one anonymous “opened today / this week / this month” count and one “first use” count. No ID and none of your training data. Turn it off any time.</p>
       <p className="muted small" style={{ marginTop: 4, fontStyle: "italic" }}>A personal note: please leave it on. Seeing that real people use and love Gymmy is what keeps me motivated to keep maintaining it. Thank you! 💚</p>
       <h2>Danger zone</h2>
-      <button className="btn ghost danger" onClick={() => { if (confirm("Erase the plan AND every session on this phone? Save a backup first.")) { resetAll(); go("today"); } }}>Erase everything</button>
+      <button className="btn ghost danger" onClick={async () => { if (await confirmAction("Erase the plan AND every session on this phone?", "Save a backup first.", "Erase everything", "Back")) { resetAll(); go("today"); } }}>Erase everything</button>
       <p className="muted small" style={{ marginTop: 24 }}><a className="link" href={import.meta.env.BASE_URL + "about/"} target="_blank" rel="noreferrer">About Gymmy</a> · free for personal use · your training data never leaves your phone</p>
     </div>
   );
@@ -130,7 +130,7 @@ function WorkoutEditor({ w, unit, onBack }) {
             </button>
             <button className="iconbtn" onClick={() => move(i, -1)}>↑</button>
             <button className="iconbtn" onClick={() => move(i, 1)}>↓</button>
-            <button className="iconbtn" style={{ color: "var(--red)" }} onClick={() => { if (confirm(`Remove ${x.name}?`)) up((ww) => { ww.exercises.splice(i, 1); }); }}>✕</button>
+            <button className="iconbtn" style={{ color: "var(--red)" }} onClick={async () => { if (await confirmAction(`Remove ${x.name}?`, "", "Remove")) up((ww) => { ww.exercises.splice(i, 1); }); }}>✕</button>
           </div>
         ))}
       </div>
@@ -175,7 +175,7 @@ Suitcase Carry 3x30m 16kg per side`}</pre>
         <>
           <h2>Found</h2>
           {preview.map((w) => <div className="card" key={w.id}><h3>{w.name}</h3><table><tbody>{w.exercises.map((x, i) => <tr key={i}><td>{x.name}</td><td className="muted small">{fmtTarget(x, S.settings.unit)}</td></tr>)}</tbody></table></div>)}
-          <div className="row wrap"><button className="btn primary" onClick={() => accept(false)}>Add to my plan</button>{S.plan.workouts.length > 0 && <button className="btn" onClick={() => { if (confirm("Replace the current workouts with these?")) accept(true); }}>Replace my plan</button>}</div>
+          <div className="row wrap"><button className="btn primary" onClick={() => accept(false)}>Add to my plan</button>{S.plan.workouts.length > 0 && <button className="btn" onClick={async () => { if (await confirmAction("Replace the current workouts with these?", "", "Replace", "Keep current")) accept(true); }}>Replace my plan</button>}</div>
         </>
       )}
     </div>
