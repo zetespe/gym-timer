@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, matchExercises, findExercise, parseTime, fmtTime, fmtEntry, fmtTarget, finalizeDraft, cardioDefaults } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
 import { emptyState, migrate, strList, migrateExercise, normalizeSession } from "./store";
 
 describe("technique fields and training rules", () => {
@@ -269,16 +269,12 @@ describe("matchExercises", () => {
 });
 
 describe("cardio", () => {
-  const walk = migrateExercise({ id: "treadmill_walk", name: "Treadmill walk", ...cardioDefaults("treadmill") });
+  const walk = migrateExercise({ id: "treadmill_walk", name: "Treadmill walk", mode: "cardio", machine: "treadmill" });
+  const logged = (exId, mode, sets, extra = {}) => normalizeSession({ id: exId + mode, date: "2026-10-01", exercises: [{ exId, name: exId, mode, sets, ...extra }] });
 
-  it("reads time as mm:ss, h:mm:ss, or bare minutes", () => {
-    expect(parseTime("25:30")).toBe(1530);
-    expect(parseTime("25.30")).toBe(1530);
-    expect(parseTime("1:02:03")).toBe(3723);
-    expect(parseTime("25")).toBe(1500);
-    expect(parseTime("25:75")).toBe(null);
-    expect(parseTime("abc")).toBe(null);
+  it("shows time as m:ss, or h:mm:ss past an hour", () => {
     expect(fmtTime(1530)).toBe("25:30");
+    expect(fmtTime(65)).toBe("1:05");
     expect(fmtTime(3723)).toBe("1:02:03");
   });
 
@@ -287,17 +283,31 @@ describe("cardio", () => {
     expect(migrateExercise({ name: "Rower", mode: "cardio", machine: "rower" }).track).toEqual(["m", "lvl", "spm"]);
     expect(migrateExercise({ name: "Horse riding", mode: "cardio", machine: "pony" }).machine).toBe("other");
     expect(fmtTarget(walk, "kg")).toBe("Goal 30:00 · Treadmill · rest 90 s");
-    expect(fmtTarget({ ...walk, goal: "dist", dist: 3000 }, "kg")).toBe("Goal 3.00 km · Treadmill · rest 90 s");
+    expect(fmtTarget(migrateExercise({ ...walk, goal: "dist", dist: 3000 }), "kg")).toBe("Goal 3.00 km · Treadmill · rest 90 s");
   });
 
-  it("prefills the goal, then last time's settings", () => {
+  it("a distance goal always records distance", () => {
+    const bike = migrateExercise({ name: "Bike", mode: "cardio", machine: "bike", track: ["lvl"], goal: "dist" });
+    expect(bike.track).toEqual(["m", "lvl"]);
+    expect(bike.dist).toBe(3000);
+  });
+
+  it("prefills the goal and last time's settings, never last time's results", () => {
     const st = emptyState();
-    let e = newEntry(st, walk);
-    expect(e.sets).toEqual([{ done: false, s: 1800, m: null, inc: null, spd: null }]);
-    st.sessions.push(normalizeSession({ id: "a", date: "2026-10-01", exercises: [{ exId: "treadmill_walk", name: "Treadmill walk", mode: "cardio", machine: "treadmill", track: ["m", "inc", "spd"], sets: [{ s: 1530, m: 2100, inc: 8, spd: 5.5 }] }] }));
-    e = newEntry(st, walk);
-    expect(e.sets[0]).toEqual({ done: false, s: 1800, m: 2100, inc: 8, spd: 5.5 });
+    expect(newEntry(st, walk).sets).toEqual([{ done: false, s: 1800, m: null, inc: null, spd: null }]);
+    st.sessions.push(logged("treadmill_walk", "cardio", [{ s: 1530, m: 2100, inc: 8, spd: 5.5 }], { machine: "treadmill", track: ["m", "inc", "spd"] }));
+    expect(newEntry(st, walk).sets[0]).toEqual({ done: false, s: 1800, m: null, inc: 8, spd: 5.5 });
+    // Distance goal: the time is today's result, so it starts empty.
+    expect(newEntry(st, migrateExercise({ ...walk, goal: "dist", dist: 2000 })).sets[0]).toEqual({ done: false, s: null, m: 2000, inc: 8, spd: 5.5 });
     expect(suggest(st, walk).kind).toBe("none");
+  });
+
+  it("ignores history logged under another type", () => {
+    const st = emptyState();
+    st.sessions.push(logged("plank", "cardio", [{ s: 1530 }], { machine: "other" }));
+    const hold = migrateExercise({ id: "plank", name: "Plank", mode: "time", secs: 30, sets: 2 });
+    expect(newEntry(st, hold).sets.map((x) => x.s)).toEqual([30, 30]);
+    expect(suggest(st, hold).kind).toBe("none");
   });
 
   it("saves every field and shows one total line", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useLog, patch, setState, getState, slug } from "./store";
-import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, cardioDefaults, distUnit } from "./model";
+import { useLog, patch, setState, getState, slug, migrateExercise } from "./store";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
 import { Stepper, TimeField, toast, ask, confirmAction } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
@@ -93,7 +93,7 @@ export default function Session({ onFinished, onExit }) {
         if (v == null) step = matches.length ? "pick" : "name"; else { mode = v; step = v === "cardio" ? "machine" : "weight"; }
       } else if (step === "machine") {
         const v = await ask({ title: "Which machine?", buttons: Object.entries(MACHINES).map(([k, m]) => ({ label: m.label, value: k })), back: "Back", stack: true });
-        if (v == null) step = "mode"; else x = { id: slug(name), name, ...cardioDefaults(v), rest: 90 };
+        if (v == null) step = "mode"; else x = migrateExercise({ id: slug(name), name, mode: "cardio", machine: v });
       } else {
         const v = await ask({ title: "Weights or bodyweight?", buttons: [{ label: "Weights", value: false }, { label: "Bodyweight", value: true }], back: "Back", stack: true });
         if (v == null) step = "mode";
@@ -136,8 +136,8 @@ export default function Session({ onFinished, onExit }) {
               <div className="cgrid" key={si}>
                 <TimeField value={s.s} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].s = v; })} />
                 {e.track.map((k) => k === "m"
-                  ? <Stepper key={k} value={s.m == null ? null : distUnit(e.machine) === "km" ? s.m / 1000 : s.m} step={distUnit(e.machine) === "km" ? 0.1 : 50} unit={distUnit(e.machine)}
-                      onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].m = v == null ? null : distUnit(e.machine) === "km" ? Math.round(v * 1000) : v; })} />
+                  ? <Stepper key={k} value={toDisplayDist(s.m, e.machine)} step={distUnit(e.machine) === "km" ? 0.1 : 50} unit={distUnit(e.machine)}
+                      onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].m = fromDisplayDist(v, e.machine); })} />
                   : <Stepper key={k} value={s[k]} step={CARDIO_FIELDS[k].step} unit={CARDIO_FIELDS[k].unit} inputMode={CARDIO_FIELDS[k].step < 1 ? "decimal" : "numeric"} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />)}
                 <button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="done">✓</button>
               </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useLog, patch, setState, uid, slug, migrateExercise, resetAll } from "./store";
-import { parsePlanText, applyImport, extractJSON, fmtTarget, CARDIO_FIELDS, MACHINES, cardioDefaults, distUnit } from "./model";
+import { useLog, patch, setState, uid, slug, migrateExercise, resetAll, SHARED_EXERCISE_KEYS } from "./store";
+import { parsePlanText, applyImport, extractJSON, fmtTarget, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
 import { Field, Stepper, TimeField, toast, confirmAction } from "./ui";
 
 export default function Plan({ params, go }) {
@@ -85,14 +85,14 @@ function WorkoutEditor({ w, unit, onBack }) {
     if (!x) { setExIdx(null); return null; }
     const set = (k, v) => up((ww) => { ww.exercises[exIdx][k] = v; });
     const cardio = x.mode === "cardio";
-    // Switching type swaps in sensible defaults for the fields the new type uses.
+    // Switching between reps, time and distance keeps sets and weights. Into or
+    // out of cardio only the name, rest and technique carry over; the rest
+    // starts from that type's defaults.
     const setMode = (mode) => up((ww) => {
       const ex = ww.exercises[exIdx];
-      if (mode === "cardio") Object.assign(ex, cardioDefaults());
-      else Object.assign(ex, { mode, sets: ex.mode === "cardio" ? 3 : ex.sets, bodyweight: ex.mode === "cardio" ? false : ex.bodyweight, weight: ex.weight ?? 0,
-        repsMin: ex.repsMin ?? 8, repsMax: ex.repsMax ?? 8, secs: mode === "time" && (ex.mode === "cardio" || ex.secs == null) ? 30 : ex.secs, dist: mode === "dist" && ex.dist == null ? 30 : ex.dist });
+      const keep = mode !== "cardio" && ex.mode !== "cardio" ? ex : Object.fromEntries(SHARED_EXERCISE_KEYS.map((k) => [k, ex[k]]));
+      ww.exercises[exIdx] = migrateExercise({ ...keep, mode, ...(mode === "cardio" ? { machine: "treadmill" } : {}) });
     });
-    const km = distUnit(x.machine) === "km";
     return (
       <div className="page">
         <p><button className="link" onClick={() => setExIdx(null)}>‹ {w.name}</button></p>
@@ -100,21 +100,21 @@ function WorkoutEditor({ w, unit, onBack }) {
         <Field label="Name"><input className="text" value={x.name} onChange={(e) => { set("name", e.target.value); }} onBlur={(e) => { if (!x.id || x.id.startsWith("new_")) set("id", slug(e.target.value)); }} /></Field>
         <Field label="Measured in"><select className="text" value={x.mode} onChange={(e) => setMode(e.target.value)}><option value="reps">Reps</option><option value="time">Seconds</option><option value="dist">Metres</option><option value="cardio">Cardio</option></select></Field>
         {cardio && <>
-          <Field label="Machine"><select className="text" value={x.machine} onChange={(e) => up((ww) => { Object.assign(ww.exercises[exIdx], { machine: e.target.value, track: [...MACHINES[e.target.value].track] }); })}>
+          <Field label="Machine"><select className="text" value={x.machine} onChange={(e) => up((ww) => { ww.exercises[exIdx] = migrateExercise({ ...ww.exercises[exIdx], machine: e.target.value, track: null }); })}>
             {Object.entries(MACHINES).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}</select></Field>
           <Field label="Record (time is always recorded)">
             {Object.entries(CARDIO_FIELDS).map(([k, f]) => (
-              <div className="row" key={k} style={{ marginTop: 6 }}><span className="grow">{f.label}</span>
-                <input type="checkbox" checked={x.track.includes(k)} style={{ width: 24, height: 24 }}
+              <div className="row" key={k} style={{ marginTop: 6 }}><span className="grow">{f.label}{k === "m" && x.goal === "dist" && <span className="muted small"> · needed for the distance goal</span>}</span>
+                <input type="checkbox" checked={x.track.includes(k)} disabled={k === "m" && x.goal === "dist"} style={{ width: 24, height: 24 }}
                   onChange={(e) => set("track", Object.keys(CARDIO_FIELDS).filter((kk) => (kk === k ? e.target.checked : x.track.includes(kk))))} /></div>
             ))}
           </Field>
           <div className="grid2">
-            <Field label="Goal"><select className="text" value={x.goal} onChange={(e) => up((ww) => { const ex = ww.exercises[exIdx]; ex.goal = e.target.value; if (ex.goal === "time" && ex.secs == null) ex.secs = 1800; if (ex.goal === "dist" && ex.dist == null) ex.dist = 3000; })}>
+            <Field label="Goal"><select className="text" value={x.goal} onChange={(e) => up((ww) => { ww.exercises[exIdx] = migrateExercise({ ...ww.exercises[exIdx], goal: e.target.value }); })}>
               <option value="time">Time</option><option value="dist">Distance</option></select></Field>
             {x.goal === "time"
               ? <Field label="Target time"><TimeField value={x.secs} onChange={(v) => set("secs", v)} /></Field>
-              : <Field label="Target distance"><Stepper value={x.dist == null ? null : km ? x.dist / 1000 : x.dist} step={km ? 0.5 : 100} unit={distUnit(x.machine)} onChange={(v) => set("dist", v == null ? null : km ? Math.round(v * 1000) : v)} /></Field>}
+              : <Field label="Target distance"><Stepper value={toDisplayDist(x.dist, x.machine)} step={distUnit(x.machine) === "km" ? 0.5 : 100} unit={distUnit(x.machine)} onChange={(v) => set("dist", fromDisplayDist(v, x.machine))} /></Field>}
             <Field label="Rest after (s)"><Stepper value={x.rest} step={15} inputMode="numeric" onChange={(v) => set("rest", v)} /></Field>
           </div>
         </>}

@@ -1,6 +1,6 @@
 // Pure helpers over the log state: formatting, history lookups, the next-weight
 // rule, the quick-log parser, plan-text parser and export/import.
-import { normalizeSession, migrateWorkout, slug, uid, today, strList, emptyState, MACHINE_TRACK } from "./store";
+import { normalizeSession, migrateWorkout, slug, uid, today, strList, emptyState, MACHINES, CARDIO_TRACK_KEYS } from "./store";
 
 export const valKey = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "r");
 export const valUnit = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "reps");
@@ -9,7 +9,8 @@ export const setVal = (set, mode) => set[valKey(mode)];
 // ---- cardio ----
 // A cardio entry records blocks (one for a steady session): always a time,
 // plus the fields chosen for that exercise. Time stays in seconds and distance
-// in metres like the other modes; only the display uses mm:ss and km.
+// in metres like the other modes; only the display uses m:ss and km.
+export { MACHINES };
 export const CARDIO_FIELDS = {
   m: { label: "Distance" },
   inc: { label: "Incline", unit: "% incline", step: 0.5 },
@@ -17,15 +18,12 @@ export const CARDIO_FIELDS = {
   lvl: { label: "Level", unit: "level", step: 1 },
   spm: { label: "Stroke rate", unit: "spm", step: 1 },
 };
-export const CARDIO_KEYS = ["s", ...Object.keys(CARDIO_FIELDS)];
-const MACHINE_LABELS = { treadmill: "Treadmill", bike: "Bike", rower: "Rower", other: "Other" };
-export const MACHINES = Object.fromEntries(Object.entries(MACHINE_TRACK).map(([k, track]) => [k, { label: MACHINE_LABELS[k], track }]));
-// What a new cardio exercise starts with; the plan editor can change any of it.
-export function cardioDefaults(machine = "treadmill") {
-  return { mode: "cardio", machine, track: [...MACHINES[machine].track], goal: "time", secs: 1800, dist: null, sets: 1, bodyweight: true, perSide: false };
-}
-// Rowers count metres; everything else counts kilometres.
+export const CARDIO_KEYS = ["s", ...CARDIO_TRACK_KEYS];
+// Rowers count metres; everything else counts kilometres. Distance is stored
+// in metres; these convert to and from what the steppers show.
 export const distUnit = (machine) => (machine === "rower" ? "m" : "km");
+export const toDisplayDist = (m, machine) => (m == null ? null : distUnit(machine) === "km" ? m / 1000 : m);
+export const fromDisplayDist = (v, machine) => (v == null ? null : distUnit(machine) === "km" ? Math.round(v * 1000) : v);
 export function fmtDist(m, machine) {
   if (m == null) return "";
   return distUnit(machine) === "m" ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`;
@@ -34,16 +32,6 @@ export function fmtTime(sec) {
   if (sec == null) return "";
   const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
-}
-// "25:30", "25.30" or "25 30" → 25 min 30 s; "1:02:03" → 1 h 2 min 3 s; a bare
-// "25" is minutes. Returns null for anything else.
-export function parseTime(text) {
-  const parts = String(text).trim().split(/[:.,\s]+/).filter(Boolean);
-  if (!parts.length || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) return null;
-  const n = parts.map(Number);
-  if (n.length === 1) return n[0] * 60;
-  if (n[n.length - 1] > 59 || (n.length === 3 && n[1] > 59)) return null;
-  return n.length === 2 ? n[0] * 60 + n[1] : n[0] * 3600 + n[1] * 60 + n[2];
 }
 // Totals over the blocks: time and distance add up, the settings average.
 export function cardioTotals(sets) {
@@ -127,8 +115,10 @@ export function allExercises(state) {
 
 // ---- next-weight rule (double progression) ----
 // Returns { kind: 'up'|'repeat'|'down'|'none', weight, text }.
+const sameMode = (hist, mode) => hist.filter((h) => (h.entry.mode || "reps") === mode);
+
 export function suggest(state, ex) {
-  const hist = historyFor(state.sessions, ex.id);
+  const hist = sameMode(historyFor(state.sessions, ex.id), ex.mode);
   const unit = state.settings.unit;
   // Cardio has no weight to progress; the session shows last time instead.
   if (!hist.length || ex.mode === "cardio") return { kind: "none", text: "" };
@@ -179,17 +169,19 @@ const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st",
 // ---- session drafts ----
 export function newEntry(state, x) {
   const e = { exId: x.id, name: x.name, mode: x.mode || "reps", perSide: !!x.perSide, bodyweight: !!x.bodyweight, rest: x.rest ?? 90, notes: "", sets: [] };
-  const last = lastFor(state.sessions, x.id);
+  // Only last time's entry of the same type: an exercise switched from cardio
+  // to holds must not prefill 25 minutes as a hold.
+  const last = sameMode(historyFor(state.sessions, x.id), e.mode)[0] || null;
   if (e.mode === "cardio") {
-    // One block. The goal fills its own field; everything else starts from
-    // last time, or empty.
+    // One block. The goal fills its own field and the machine settings come
+    // from last time; time and distance are today's results, so they start
+    // empty unless they are the goal.
     e.machine = MACHINES[x.machine] ? x.machine : "other";
     e.track = x.track || MACHINES[e.machine].track;
     e.bodyweight = true;
     const ls = last ? last.entry.sets[0] || {} : {};
-    const set = { done: false, s: x.goal !== "dist" && x.secs != null ? x.secs : ls.s ?? null };
-    for (const k of e.track) set[k] = ls[k] ?? null;
-    if (x.goal === "dist" && x.dist != null) set.m = x.dist;
+    const set = { done: false, s: x.goal === "time" ? x.secs ?? null : null };
+    for (const k of e.track) set[k] = k === "m" ? (x.goal === "dist" ? x.dist ?? null : null) : ls[k] ?? null;
     e.sets.push(set);
     return e;
   }

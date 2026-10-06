@@ -63,42 +63,49 @@ export function migrateWorkout(w) {
 }
 
 const MODES = ["reps", "time", "dist", "cardio"];
-// The fields each cardio machine records by default (labels live in model.js).
-export const MACHINE_TRACK = { treadmill: ["m", "inc", "spd"], bike: ["m", "lvl"], rower: ["m", "lvl", "spm"], other: ["m"] };
-const TRACK_KEYS = ["m", "inc", "spd", "lvl", "spm"];
-const cardioMachine = (v) => (MACHINE_TRACK[v] ? v : "other");
-const cardioTrack = (track, machine) => (Array.isArray(track) ? TRACK_KEYS.filter((k) => track.includes(k)) : [...MACHINE_TRACK[machine]]);
+// Cardio machines and the fields each records by default. Every cardio block
+// has a time (s); CARDIO_TRACK_KEYS are the optional fields, in display order.
+export const MACHINES = {
+  treadmill: { label: "Treadmill", track: ["m", "inc", "spd"] },
+  bike: { label: "Bike", track: ["m", "lvl"] },
+  rower: { label: "Rower", track: ["m", "lvl", "spm"] },
+  other: { label: "Other", track: ["m"] },
+};
+export const CARDIO_TRACK_KEYS = ["m", "inc", "spd", "lvl", "spm"];
+const cardioMachine = (v) => (MACHINES[v] ? v : "other");
+const cardioTrack = (track, machine) => (Array.isArray(track) ? CARDIO_TRACK_KEYS.filter((k) => track.includes(k)) : [...MACHINES[machine].track]);
+// Fields every exercise type keeps when its type changes.
+export const SHARED_EXERCISE_KEYS = ["id", "name", "rest", "target", "cue", "progression", "steps", "watchFor"];
 
 export function migrateExercise(x) {
   const mode = MODES.includes(x.mode) ? x.mode : "reps";
+  const shared = {
+    id: x.id || slug(x.name),
+    name: x.name || "Exercise",
+    rest: x.rest != null ? parseRest(x.rest) : 90,
+    target: x.target || "",
+    cue: x.cue || "",
+    progression: x.progression || "",
+    steps: strList(x.steps),
+    watchFor: strList(x.watchFor ?? x.watchfor ?? x.faults),
+  };
   if (mode === "cardio") {
     const machine = cardioMachine(x.machine);
+    const goal = x.goal === "dist" ? "dist" : "time";
+    const track = cardioTrack(x.track, machine);
+    // A distance goal needs the distance field to record against.
+    if (goal === "dist" && !track.includes("m")) track.unshift("m");
     return {
-      id: x.id || slug(x.name),
-      name: x.name || "Exercise",
-      mode, machine,
-      track: cardioTrack(x.track, machine),
-      goal: x.goal === "dist" ? "dist" : "time",
-      perSide: false,
-      bodyweight: true,
-      sets: x.sets || 1,
-      repsMin: null, repsMax: null,
-      secs: x.secs ?? (x.goal === "dist" ? null : 1800),
-      dist: x.dist ?? null,
-      weight: null,
-      increment: 1,
-      rest: x.rest != null ? parseRest(x.rest) : 90,
-      target: x.target || "",
-      cue: x.cue || "",
-      progression: x.progression || "",
-      steps: strList(x.steps),
-      watchFor: strList(x.watchFor ?? x.watchfor ?? x.faults),
+      ...shared, mode, machine, track, goal,
+      perSide: false, bodyweight: true, sets: x.sets || 1,
+      repsMin: null, repsMax: null, weight: null, increment: 1,
+      secs: x.secs ?? (goal === "time" ? 1800 : null),
+      dist: x.dist ?? (goal === "dist" ? 3000 : null),
     };
   }
   const repsMin = x.repsMin ?? x.reps ?? (mode === "reps" ? 8 : null);
   return {
-    id: x.id || slug(x.name),
-    name: x.name || "Exercise",
+    ...shared,
     mode,
     perSide: !!x.perSide,
     bodyweight: !!x.bodyweight,
@@ -109,12 +116,6 @@ export function migrateExercise(x) {
     dist: x.dist ?? (mode === "dist" ? 30 : null),
     weight: x.bodyweight ? (x.weight ?? null) : (x.weight ?? 0),
     increment: x.increment ?? 1,
-    rest: x.rest != null ? parseRest(x.rest) : 90,
-    target: x.target || "",
-    cue: x.cue || "",
-    progression: x.progression || "",
-    steps: strList(x.steps),
-    watchFor: strList(x.watchFor ?? x.watchfor ?? x.faults),
   };
 }
 
@@ -149,7 +150,7 @@ export function normalizeSession(s) {
         if (st.r != null) o.r = +st.r;
         if (st.s != null) o.s = +st.s;
         if (st.m != null) o.m = +st.m;
-        for (const k of ["inc", "spd", "lvl", "spm"]) if (st[k] != null) o[k] = +st[k];
+        for (const k of CARDIO_TRACK_KEYS) if (k !== "m" && st[k] != null) o[k] = +st[k];
         if (st.note) o.note = st.note;
         return o;
       }),

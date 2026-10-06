@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { fmtTime, parseTime } from "./model";
 
 // ---- toast (module-level so any helper can call it) ----
 let toastListener = null;
@@ -79,16 +78,27 @@ export function Stepper({ value, onChange, step = 1, unit, inputMode = "decimal"
   );
 }
 
-// Time typed like the machine shows it: "25:30" (or "25.30" on a number pad).
-// A bare number is minutes. Anything unreadable snaps back to the old value.
+// Minutes and seconds in two boxes, so a number pad can't be misread (is
+// "22.5" 22:05 or 22½ minutes?). Minutes may go past 59. Empty (or 0:00)
+// clears the time; an impossible entry snaps back to the old value.
+const splitTime = (v) => (v == null ? ["", ""] : [String(Math.floor(v / 60)), String(Math.round(v % 60)).padStart(2, "0")]);
 export function TimeField({ value, onChange }) {
-  const [text, setText] = useState(fmtTime(value));
-  useEffect(() => { setText(fmtTime(value)); }, [value]);
-  const commit = () => { const v = parseTime(text); if (v == null) setText(fmtTime(value)); else onChange(v); };
+  const [[mm, ss], setParts] = useState(splitTime(value));
+  useEffect(() => { setParts(splitTime(value)); }, [value]);
+  const commit = () => {
+    if (!/^\d*$/.test(mm) || !/^\d*$/.test(ss) || +ss > 59) { setParts(splitTime(value)); return; }
+    // 0:00 is never a result: emptying the boxes one at a time passes through it.
+    const v = (+mm || 0) * 60 + (+ss || 0) || null;
+    if (v === value) setParts(splitTime(value)); else onChange(v);
+  };
+  const box = (val, i, label, ph) => (
+    <input inputMode="numeric" aria-label={label} placeholder={ph} value={val} maxLength={i ? 2 : 3}
+      onChange={(e) => setParts(i ? [mm, e.target.value.trim()] : [e.target.value.trim(), ss])} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }} />
+  );
   return (
     <div>
-      <input className="timefield" inputMode="decimal" placeholder="mm:ss" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }} />
-      <div className="unitlab">mm:ss</div>
+      <div className="timefield">{box(mm, 0, "minutes", "min")}<span>:</span>{box(ss, 1, "seconds", "sec")}</div>
+      <div className="unitlab">min : sec</div>
     </div>
   );
 }
