@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { fmtTime, parseTime } from "./model";
 
 // ---- toast (module-level so any helper can call it) ----
 let toastListener = null;
@@ -74,6 +75,20 @@ export function Stepper({ value, onChange, step = 1, unit, inputMode = "decimal"
         <button type="button" onClick={() => onChange(Math.round(((value || 0) + step) * 100) / 100)}>+</button>
       </div>
       {unit && <div className="unitlab">{unit}</div>}
+    </div>
+  );
+}
+
+// Time typed like the machine shows it: "25:30" (or "25.30" on a number pad).
+// A bare number is minutes. Anything unreadable snaps back to the old value.
+export function TimeField({ value, onChange }) {
+  const [text, setText] = useState(fmtTime(value));
+  useEffect(() => { setText(fmtTime(value)); }, [value]);
+  const commit = () => { const v = parseTime(text); if (v == null) setText(fmtTime(value)); else onChange(v); };
+  return (
+    <div>
+      <input className="timefield" inputMode="decimal" placeholder="mm:ss" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }} />
+      <div className="unitlab">mm:ss</div>
     </div>
   );
 }

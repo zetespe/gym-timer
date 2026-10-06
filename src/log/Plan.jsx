@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLog, patch, setState, uid, slug, migrateExercise, resetAll } from "./store";
-import { parsePlanText, applyImport, extractJSON, fmtTarget } from "./model";
-import { Field, Stepper, toast, confirmAction } from "./ui";
+import { parsePlanText, applyImport, extractJSON, fmtTarget, CARDIO_FIELDS, MACHINES, cardioDefaults, distUnit } from "./model";
+import { Field, Stepper, TimeField, toast, confirmAction } from "./ui";
 
 export default function Plan({ params, go }) {
   const S = useLog();
@@ -84,13 +84,41 @@ function WorkoutEditor({ w, unit, onBack }) {
     const x = w.exercises[exIdx];
     if (!x) { setExIdx(null); return null; }
     const set = (k, v) => up((ww) => { ww.exercises[exIdx][k] = v; });
+    const cardio = x.mode === "cardio";
+    // Switching type swaps in sensible defaults for the fields the new type uses.
+    const setMode = (mode) => up((ww) => {
+      const ex = ww.exercises[exIdx];
+      if (mode === "cardio") Object.assign(ex, cardioDefaults());
+      else Object.assign(ex, { mode, sets: ex.mode === "cardio" ? 3 : ex.sets, bodyweight: ex.mode === "cardio" ? false : ex.bodyweight, weight: ex.weight ?? 0,
+        repsMin: ex.repsMin ?? 8, repsMax: ex.repsMax ?? 8, secs: mode === "time" && (ex.mode === "cardio" || ex.secs == null) ? 30 : ex.secs, dist: mode === "dist" && ex.dist == null ? 30 : ex.dist });
+    });
+    const km = distUnit(x.machine) === "km";
     return (
       <div className="page">
         <p><button className="link" onClick={() => setExIdx(null)}>‹ {w.name}</button></p>
         <h1>{x.name || "Exercise"}</h1>
         <Field label="Name"><input className="text" value={x.name} onChange={(e) => { set("name", e.target.value); }} onBlur={(e) => { if (!x.id || x.id.startsWith("new_")) set("id", slug(e.target.value)); }} /></Field>
-        <Field label="Measured in"><select className="text" value={x.mode} onChange={(e) => set("mode", e.target.value)}><option value="reps">Reps</option><option value="time">Seconds</option><option value="dist">Metres</option></select></Field>
-        <div className="grid2">
+        <Field label="Measured in"><select className="text" value={x.mode} onChange={(e) => setMode(e.target.value)}><option value="reps">Reps</option><option value="time">Seconds</option><option value="dist">Metres</option><option value="cardio">Cardio</option></select></Field>
+        {cardio && <>
+          <Field label="Machine"><select className="text" value={x.machine} onChange={(e) => up((ww) => { Object.assign(ww.exercises[exIdx], { machine: e.target.value, track: [...MACHINES[e.target.value].track] }); })}>
+            {Object.entries(MACHINES).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}</select></Field>
+          <Field label="Record (time is always recorded)">
+            {Object.entries(CARDIO_FIELDS).map(([k, f]) => (
+              <div className="row" key={k} style={{ marginTop: 6 }}><span className="grow">{f.label}</span>
+                <input type="checkbox" checked={x.track.includes(k)} style={{ width: 24, height: 24 }}
+                  onChange={(e) => set("track", Object.keys(CARDIO_FIELDS).filter((kk) => (kk === k ? e.target.checked : x.track.includes(kk))))} /></div>
+            ))}
+          </Field>
+          <div className="grid2">
+            <Field label="Goal"><select className="text" value={x.goal} onChange={(e) => up((ww) => { const ex = ww.exercises[exIdx]; ex.goal = e.target.value; if (ex.goal === "time" && ex.secs == null) ex.secs = 1800; if (ex.goal === "dist" && ex.dist == null) ex.dist = 3000; })}>
+              <option value="time">Time</option><option value="dist">Distance</option></select></Field>
+            {x.goal === "time"
+              ? <Field label="Target time"><TimeField value={x.secs} onChange={(v) => set("secs", v)} /></Field>
+              : <Field label="Target distance"><Stepper value={x.dist == null ? null : km ? x.dist / 1000 : x.dist} step={km ? 0.5 : 100} unit={distUnit(x.machine)} onChange={(v) => set("dist", v == null ? null : km ? Math.round(v * 1000) : v)} /></Field>}
+            <Field label="Rest after (s)"><Stepper value={x.rest} step={15} inputMode="numeric" onChange={(v) => set("rest", v)} /></Field>
+          </div>
+        </>}
+        {!cardio && <><div className="grid2">
           <Field label="Sets"><Stepper value={x.sets} inputMode="numeric" onChange={(v) => set("sets", v || 1)} min={1} /></Field>
           {x.mode === "reps" && <Field label="Reps, bottom of range"><Stepper value={x.repsMin} inputMode="numeric" onChange={(v) => { set("repsMin", v); if (x.repsMax < v) set("repsMax", v); }} min={1} /></Field>}
           {x.mode === "reps" && <Field label="Reps, top of range"><Stepper value={x.repsMax} inputMode="numeric" onChange={(v) => set("repsMax", Math.max(v || 1, x.repsMin || 1))} min={1} /></Field>}
@@ -103,12 +131,12 @@ function WorkoutEditor({ w, unit, onBack }) {
         {!x.bodyweight && <div className="grid2" style={{ marginTop: 8 }}>
           <Field label={`Starting weight (${unit})`}><Stepper value={x.weight} step={unit === "kg" ? 1 : 2.5} onChange={(v) => set("weight", v)} /></Field>
           <Field label={`Increase by (${unit})`}><Stepper value={x.increment} step={0.5} onChange={(v) => set("increment", v || 0.5)} min={0.5} /></Field>
-        </div>}
+        </div>}</>}
         <Field label="Cue (one short reminder, always visible during the session)"><textarea rows={2} value={x.cue} onChange={(e) => set("cue", e.target.value)} /></Field>
         <Field label="How to do it (one step per line)"><textarea rows={4} value={(x.steps || []).join("\n")} onChange={(e) => set("steps", e.target.value.split("\n"))} onBlur={(e) => set("steps", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))} /></Field>
         <Field label="Watch for (common faults, one per line)"><textarea rows={3} value={(x.watchFor || []).join("\n")} onChange={(e) => set("watchFor", e.target.value.split("\n"))} onBlur={(e) => set("watchFor", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))} /></Field>
         <Field label="Progression note"><textarea rows={2} value={x.progression} onChange={(e) => set("progression", e.target.value)} /></Field>
-        <p className="muted small">Progression rule: every planned set at the top of the range → weight goes up by the increment (bodyweight: the progression note below becomes the next step). Fewer sets than planned → same load, add the missing set. In range but short of the top → repeat. Below the bottom twice in a row → about 10% less. The suggestion and this note show together under “How to do it”.</p>
+        {!cardio && <p className="muted small">Progression rule: every planned set at the top of the range → weight goes up by the increment (bodyweight: the progression note below becomes the next step). Fewer sets than planned → same load, add the missing set. In range but short of the top → repeat. Below the bottom twice in a row → about 10% less. The suggestion and this note show together under “How to do it”.</p>}
         <button className="btn primary" onClick={() => setExIdx(null)}>Done</button>
       </div>
     );

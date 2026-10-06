@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLog, patch, setState, getState, slug } from "./store";
-import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises } from "./model";
-import { Stepper, toast, ask, confirmAction } from "./ui";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, cardioDefaults, distUnit } from "./model";
+import { Stepper, TimeField, toast, ask, confirmAction } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
 import Technique from "./Technique";
@@ -89,8 +89,11 @@ export default function Session({ onFinished, onExit }) {
         const v = await ask({ title: "Which one?", buttons: [...matches.map((m) => ({ label: m.name, value: m })), { label: `+ New: “${name}”`, value: "new" }], back: "Back", stack: true });
         if (v == null) step = "name"; else if (v === "new") step = "mode"; else x = v;
       } else if (step === "mode") {
-        const v = await ask({ title: "Measured in?", buttons: [{ label: "Reps", value: "reps" }, { label: "Time", value: "time" }, { label: "Distance", value: "dist" }], back: "Back", stack: true });
-        if (v == null) step = matches.length ? "pick" : "name"; else { mode = v; step = "weight"; }
+        const v = await ask({ title: "Measured in?", buttons: [{ label: "Reps", value: "reps" }, { label: "Time", value: "time" }, { label: "Distance", value: "dist" }, { label: "Cardio", value: "cardio" }], back: "Back", stack: true });
+        if (v == null) step = matches.length ? "pick" : "name"; else { mode = v; step = v === "cardio" ? "machine" : "weight"; }
+      } else if (step === "machine") {
+        const v = await ask({ title: "Which machine?", buttons: Object.entries(MACHINES).map(([k, m]) => ({ label: m.label, value: k })), back: "Back", stack: true });
+        if (v == null) step = "mode"; else x = { id: slug(name), name, ...cardioDefaults(v), rest: 90 };
       } else {
         const v = await ask({ title: "Weights or bodyweight?", buttons: [{ label: "Weights", value: false }, { label: "Bodyweight", value: true }], back: "Back", stack: true });
         if (v == null) step = "mode";
@@ -129,7 +132,16 @@ export default function Session({ onFinished, onExit }) {
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
             {px && px.cue && <div className="cue">{px.cue}</div>}
             {px && <Technique x={px} sug={sug} />}
-            <div className="sets">
+            {e.mode === "cardio" ? e.sets.map((s, si) => (
+              <div className="cgrid" key={si}>
+                <TimeField value={s.s} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].s = v; })} />
+                {e.track.map((k) => k === "m"
+                  ? <Stepper key={k} value={s.m == null ? null : distUnit(e.machine) === "km" ? s.m / 1000 : s.m} step={distUnit(e.machine) === "km" ? 0.1 : 50} unit={distUnit(e.machine)}
+                      onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].m = v == null ? null : distUnit(e.machine) === "km" ? Math.round(v * 1000) : v; })} />
+                  : <Stepper key={k} value={s[k]} step={CARDIO_FIELDS[k].step} unit={CARDIO_FIELDS[k].unit} inputMode={CARDIO_FIELDS[k].step < 1 ? "decimal" : "numeric"} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />)}
+                <button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="done">✓</button>
+              </div>
+            )) : <div className="sets">
               {e.sets.map((s, si) => (
                 <div className={"set" + (hasW ? "" : " nw")} key={si}>
                   <div className="n">{si + 1}</div>
@@ -138,11 +150,12 @@ export default function Session({ onFinished, onExit }) {
                   <div><button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="set done">✓</button></div>
                 </div>
               ))}
-            </div>
+            </div>}
             <div className="ex-actions">
-              <button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(e); }}>✓ All as shown</button>
+              {/* Cardio is one block for now; interval blocks come later. */}
+              {e.mode !== "cardio" && <><button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(e); }}>✓ All as shown</button>
               <button className="btn sm" onClick={() => mut((dr) => { const ss = dr.exercises[ei].sets; const l = ss[ss.length - 1]; ss.push(l ? { ...l, done: false } : { done: false, w: e.bodyweight ? undefined : 0, [k]: 8 }); })}>+ set</button>
-              {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}
+              {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}</>}
               {e.mode === "time" && <button className="btn sm" onClick={() => setTimerFor(ei)}>⏱ Timer</button>}
               <button className="btn sm ghost danger" onClick={async () => { if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}>remove</button>
             </div>

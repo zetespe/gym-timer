@@ -62,8 +62,39 @@ export function migrateWorkout(w) {
   };
 }
 
+const MODES = ["reps", "time", "dist", "cardio"];
+// The fields each cardio machine records by default (labels live in model.js).
+export const MACHINE_TRACK = { treadmill: ["m", "inc", "spd"], bike: ["m", "lvl"], rower: ["m", "lvl", "spm"], other: ["m"] };
+const TRACK_KEYS = ["m", "inc", "spd", "lvl", "spm"];
+const cardioMachine = (v) => (MACHINE_TRACK[v] ? v : "other");
+const cardioTrack = (track, machine) => (Array.isArray(track) ? TRACK_KEYS.filter((k) => track.includes(k)) : [...MACHINE_TRACK[machine]]);
+
 export function migrateExercise(x) {
-  const mode = ["reps", "time", "dist"].includes(x.mode) ? x.mode : "reps";
+  const mode = MODES.includes(x.mode) ? x.mode : "reps";
+  if (mode === "cardio") {
+    const machine = cardioMachine(x.machine);
+    return {
+      id: x.id || slug(x.name),
+      name: x.name || "Exercise",
+      mode, machine,
+      track: cardioTrack(x.track, machine),
+      goal: x.goal === "dist" ? "dist" : "time",
+      perSide: false,
+      bodyweight: true,
+      sets: x.sets || 1,
+      repsMin: null, repsMax: null,
+      secs: x.secs ?? (x.goal === "dist" ? null : 1800),
+      dist: x.dist ?? null,
+      weight: null,
+      increment: 1,
+      rest: x.rest != null ? parseRest(x.rest) : 90,
+      target: x.target || "",
+      cue: x.cue || "",
+      progression: x.progression || "",
+      steps: strList(x.steps),
+      watchFor: strList(x.watchFor ?? x.watchfor ?? x.faults),
+    };
+  }
   const repsMin = x.repsMin ?? x.reps ?? (mode === "reps" ? 8 : null);
   return {
     id: x.id || slug(x.name),
@@ -107,7 +138,8 @@ export function normalizeSession(s) {
     exercises: (s.exercises || []).map((e) => ({
       exId: e.exId || slug(e.name),
       name: e.name || e.exId,
-      mode: ["reps", "time", "dist"].includes(e.mode) ? e.mode : "reps",
+      mode: MODES.includes(e.mode) ? e.mode : "reps",
+      ...(e.mode === "cardio" ? { machine: cardioMachine(e.machine), track: cardioTrack(e.track, cardioMachine(e.machine)) } : {}),
       perSide: !!e.perSide,
       bodyweight: !!e.bodyweight,
       notes: e.notes || "",
@@ -117,6 +149,7 @@ export function normalizeSession(s) {
         if (st.r != null) o.r = +st.r;
         if (st.s != null) o.s = +st.s;
         if (st.m != null) o.m = +st.m;
+        for (const k of ["inc", "spd", "lvl", "spm"]) if (st[k] != null) o[k] = +st[k];
         if (st.note) o.note = st.note;
         return o;
       }),
