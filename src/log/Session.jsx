@@ -58,7 +58,8 @@ export default function Session({ onFinished, onExit }) {
 
   const mut = (fn) => patch((s) => { fn(s.draft); });
   const startRest = (e) => { if (S.settings.restTimer && e.rest > 0) { restPrev.current = e.rest; setRest({ total: e.rest, endAt: Date.now() + e.rest * 1000, left: e.rest, name: e.name }); } };
-  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { dr.exercises[ei].sets[si].done = !was; }); if (!was) startRest(d.exercises[ei]); };
+  // Un-ticking also drops a cardio block's "typed" mark: an explicit untick means don't save it.
+  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { const st = dr.exercises[ei].sets[si]; st.done = !was; if (was) delete st.typed; }); if (!was) startRest(d.exercises[ei]); };
 
   const onQuick = (text) => {
     const r = parseQuickLog(text, d.exercises, unit);
@@ -119,7 +120,7 @@ export default function Session({ onFinished, onExit }) {
       {S.plan.loadNote && <div className="banner">{S.plan.loadNote}</div>}
       {d.exercises.map((e, ei) => {
         const px = workout ? workout.exercises.find((x) => x.id === e.exId) : null;
-        const last = lastFor(S.sessions, e.exId, { excludeId: d.id });
+        const last = lastFor(S.sessions, e.exId, { excludeId: d.id, mode: e.mode });
         const sug = px ? suggest(S, px) : { kind: "none", text: "" };
         const allDone = e.sets.length > 0 && e.sets.every((s) => s.done);
         const k = valKey(e.mode);
@@ -134,10 +135,10 @@ export default function Session({ onFinished, onExit }) {
             {px && <Technique x={px} sug={sug} />}
             {e.mode === "cardio" ? e.sets.map((s, si) => (
               <div className="cgrid" key={si}>
-                <TimeField value={s.s} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].s = v; })} />
+                <TimeField value={s.s} onChange={(v) => mut((dr) => { Object.assign(dr.exercises[ei].sets[si], { s: v, typed: true }); })} />
                 {e.track.map((k) => k === "m"
                   ? <Stepper key={k} value={toDisplayDist(s.m, e.machine)} step={distUnit(e.machine) === "km" ? 0.1 : 50} unit={distUnit(e.machine)}
-                      onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si].m = fromDisplayDist(v, e.machine); })} />
+                      onChange={(v) => mut((dr) => { Object.assign(dr.exercises[ei].sets[si], { m: fromDisplayDist(v, e.machine), typed: true }); })} />
                   : <Stepper key={k} value={s[k]} step={CARDIO_FIELDS[k].step} unit={CARDIO_FIELDS[k].unit} inputMode={CARDIO_FIELDS[k].step < 1 ? "decimal" : "numeric"} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />)}
                 <button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="done">✓</button>
               </div>

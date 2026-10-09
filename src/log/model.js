@@ -100,7 +100,9 @@ export function historyFor(sessions, exId, opts = {}) {
   const out = [];
   for (const s of sortedSessions(sessions)) {
     if (opts.excludeId && s.id === opts.excludeId) continue;
-    for (const e of s.exercises) if (e.exId === exId && e.sets && e.sets.length) out.push({ date: s.date, session: s.name, entry: e });
+    // `mode` keeps an exercise switched to another type from reading the old
+    // type's numbers (25 minutes of cardio as a 1530 s hold).
+    for (const e of s.exercises) if (e.exId === exId && e.sets && e.sets.length && (!opts.mode || (e.mode || "reps") === opts.mode)) out.push({ date: s.date, session: s.name, entry: e });
   }
   return out;
 }
@@ -115,10 +117,8 @@ export function allExercises(state) {
 
 // ---- next-weight rule (double progression) ----
 // Returns { kind: 'up'|'repeat'|'down'|'none', weight, text }.
-const sameMode = (hist, mode) => hist.filter((h) => (h.entry.mode || "reps") === mode);
-
 export function suggest(state, ex) {
-  const hist = sameMode(historyFor(state.sessions, ex.id), ex.mode);
+  const hist = historyFor(state.sessions, ex.id, { mode: ex.mode || "reps" });
   const unit = state.settings.unit;
   // Cardio has no weight to progress; the session shows last time instead.
   if (!hist.length || ex.mode === "cardio") return { kind: "none", text: "" };
@@ -169,9 +169,7 @@ const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st",
 // ---- session drafts ----
 export function newEntry(state, x) {
   const e = { exId: x.id, name: x.name, mode: x.mode || "reps", perSide: !!x.perSide, bodyweight: !!x.bodyweight, rest: x.rest ?? 90, notes: "", sets: [] };
-  // Only last time's entry of the same type: an exercise switched from cardio
-  // to holds must not prefill 25 minutes as a hold.
-  const last = sameMode(historyFor(state.sessions, x.id), e.mode)[0] || null;
+  const last = lastFor(state.sessions, x.id, { mode: e.mode });
   if (e.mode === "cardio") {
     // One block. The goal fills its own field and the machine settings come
     // from last time; time and distance are today's results, so they start
@@ -205,8 +203,13 @@ export function newEntry(state, x) {
 export function draftHasProgress(d) {
   if (!d) return false;
   if ((d.notes || "").trim()) return true;
-  return (d.exercises || []).some((e) => (e.notes || "").trim() || (e.sets || []).some((s) => s.done));
+  return (d.exercises || []).some((e) => (e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s)));
 }
+
+// A ticked set counts. So does a cardio block whose time or distance was typed
+// in: those start empty (bar the goal), so a typed value is a real result even
+// when the ✓ was never tapped.
+const setCounts = (e, s) => s.done || (e.mode === "cardio" && !!s.typed);
 
 export function startDraft(state, workout) {
   const d = { id: today() + "-" + uid(), date: today(), workoutId: workout ? workout.id : "free", name: workout ? workout.name : "Free session", startedAt: new Date().toISOString(), notes: "", exercises: [] };
@@ -218,7 +221,7 @@ export function finalizeDraft(d) {
   const out = { id: d.id, date: d.date, workoutId: d.workoutId, name: d.name, startedAt: d.startedAt, endedAt: new Date().toISOString(), notes: d.notes || "", exercises: [] };
   for (const e of d.exercises) {
     const keys = e.mode === "cardio" ? CARDIO_KEYS : [valKey(e.mode)];
-    const sets = e.sets.filter((s) => s.done).map((s) => { const o = {}; if (s.w != null) o.w = s.w; for (const k of keys) if (s[k] != null) o[k] = s[k]; if (s.note) o.note = s.note; return o; });
+    const sets = e.sets.filter((s) => setCounts(e, s)).map((s) => { const o = {}; if (s.w != null) o.w = s.w; for (const k of keys) if (s[k] != null) o[k] = s[k]; if (s.note) o.note = s.note; return o; });
     if (!sets.length && !e.notes) continue;
     const entry = { exId: e.exId, name: e.name, mode: e.mode, sets, perSide: e.perSide, bodyweight: e.bodyweight, notes: e.notes || "" };
     if (e.mode === "cardio") { entry.machine = e.machine; entry.track = e.track; }

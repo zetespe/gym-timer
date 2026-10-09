@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, lastFor, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
 import { emptyState, migrate, strList, migrateExercise, normalizeSession } from "./store";
 
 describe("technique fields and training rules", () => {
@@ -308,6 +308,21 @@ describe("cardio", () => {
     const hold = migrateExercise({ id: "plank", name: "Plank", mode: "time", secs: 30, sets: 2 });
     expect(newEntry(st, hold).sets.map((x) => x.s)).toEqual([30, 30]);
     expect(suggest(st, hold).kind).toBe("none");
+  });
+
+  it("keeps a typed cardio result even when the ✓ wasn't tapped", () => {
+    const d = { id: "x", date: "2026-10-06", workoutId: "free", name: "Free", exercises: [newEntry(emptyState(), walk)] };
+    expect(draftHasProgress(d)).toBe(false); // the prefilled goal alone is not a result
+    expect(finalizeDraft(d).exercises).toEqual([]);
+    Object.assign(d.exercises[0].sets[0], { s: 1530, m: 2100, typed: true });
+    expect(draftHasProgress(d)).toBe(true);
+    expect(finalizeDraft(d).exercises[0].sets).toEqual([{ s: 1530, m: 2100 }]);
+  });
+
+  it("'last time' only shows an entry of the same type", () => {
+    const sessions = [logged("plank", "time", [{ s: 30 }])];
+    expect(lastFor(sessions, "plank", { mode: "cardio" })).toBe(null);
+    expect(lastFor(sessions, "plank", { mode: "time" }).entry.sets).toEqual([{ s: 30 }]);
   });
 
   it("saves every field and shows one total line", () => {

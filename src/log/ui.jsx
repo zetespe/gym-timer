@@ -92,7 +92,8 @@ export function TimeField({ value, onChange }) {
     if (v === value) setParts(splitTime(value)); else onChange(v);
   };
   const box = (val, i, label, ph) => (
-    <input inputMode="numeric" aria-label={label} placeholder={ph} value={val} maxLength={i ? 2 : 3}
+    // Focus selects the box, so typing replaces "00" instead of hitting the length limit.
+    <input inputMode="numeric" aria-label={label} placeholder={ph} value={val} maxLength={i ? 2 : 3} onFocus={(e) => e.target.select()}
       onChange={(e) => setParts(i ? [mm, e.target.value.trim()] : [e.target.value.trim(), ss])} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }} />
   );
   return (
