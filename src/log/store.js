@@ -72,7 +72,8 @@ export const MACHINES = {
   other: { label: "Other", track: ["m"] },
 };
 export const CARDIO_TRACK_KEYS = ["m", "inc", "spd", "lvl", "spm"];
-const cardioMachine = (v) => (MACHINES[v] ? v : "other");
+// Imported JSON is written by AIs: "Treadmill" is the treadmill.
+const cardioMachine = (v) => { const k = String(v ?? "").toLowerCase(); return MACHINES[k] ? k : "other"; };
 const cardioTrack = (track, machine) => (Array.isArray(track) ? CARDIO_TRACK_KEYS.filter((k) => track.includes(k)) : [...MACHINES[machine].track]);
 // Fields every exercise type keeps when its type changes.
 export const SHARED_EXERCISE_KEYS = ["id", "name", "rest", "target", "cue", "progression", "steps", "watchFor"];
@@ -91,7 +92,9 @@ export function migrateExercise(x) {
   };
   if (mode === "cardio") {
     const machine = cardioMachine(x.machine);
-    const goal = x.goal === "dist" ? "dist" : "time";
+    // Without a stated goal, a plan that only gives a distance is a distance goal.
+    const g = String(x.goal ?? "").toLowerCase();
+    const goal = g.startsWith("dist") || (!g && x.dist != null && x.secs == null) ? "dist" : "time";
     const track = cardioTrack(x.track, machine);
     // A distance goal needs the distance field to record against.
     if (goal === "dist" && !track.includes("m")) track.unshift("m");

@@ -374,6 +374,13 @@ export function applyImport(state, obj) {
     for (const raw of obj.sessions) {
       if (!raw || !Array.isArray(raw.exercises)) continue;
       const s = normalizeSession(raw);
+      // A cardio entry sent without its machine takes the known exercise's
+      // machine and fields, so a rower stays a rower (metres, stroke rate).
+      s.exercises.forEach((e, i) => {
+        if (e.mode !== "cardio" || raw.exercises[i].machine) return;
+        const known = allExercises(next).find((x) => x.id === e.exId && x.mode === "cardio");
+        if (known) Object.assign(e, { machine: known.machine, track: raw.exercises[i].track ? e.track : known.track });
+      });
       const i = next.sessions.findIndex((x) => x.id === s.id);
       if (i >= 0) { next.sessions[i] = s; updated++; } else { next.sessions.push(s); added++; }
     }
@@ -413,12 +420,13 @@ export function extractJSON(text) {
 // this prompt plus their plan or session description, and pastes the AI's
 // JSON reply back into the app.
 export function aiPrompt(state) {
-  const ex = allExercises(state).map((x) => `${x.id} (${x.name}, ${x.mode}${x.perSide ? ", per side" : ""}${x.bodyweight ? ", bodyweight" : ""})`).join("; ");
+  const ex = allExercises(state).map((x) => `${x.id} (${x.name}, ${x.mode}${x.mode === "cardio" ? ", " + (x.machine || "other") : ""}${x.perSide ? ", per side" : ""}${x.bodyweight && x.mode !== "cardio" ? ", bodyweight" : ""})`).join("; ");
   return `You are helping me manage my training in Gymmy, a small offline workout app. I will describe a session I did, or paste a training plan (any format: tables, bullet points, a coach's document). Reply with exactly ONE JSON block I can paste into the app, then a one-line summary. Do not wrap the JSON in extra prose containing braces.
 
 To log SESSIONS:
 {"type":"gym-import","sessions":[{"id":"YYYY-MM-DD-x","date":"YYYY-MM-DD","workoutId":"<id or free>","name":"Workout name","notes":"","exercises":[{"exId":"goblet_squat","name":"Goblet Squat","mode":"reps","sets":[{"w":16,"r":8},{"w":16,"r":8}],"notes":""}]}]}
 Set fields: w = weight in ${state.settings.unit} (omit for bodyweight), r = reps (mode "reps"), s = seconds (mode "time"), m = metres (mode "dist"). One object per set.
+Cardio (treadmill, bike, rower, any cardio machine or activity) uses mode "cardio" with "machine" and "track" on the exercise (always include both, also for known exercises) and ONE set object for the whole session: s = total time in seconds (always), plus only what was recorded: m = distance in metres, inc = incline %, spd = speed km/h, lvl = level/resistance, spm = strokes per minute. Anything else mentioned (heart rate, elevation, how it felt) goes in the exercise "notes". Example: {"exId":"treadmill_walk","name":"Treadmill walk","mode":"cardio","machine":"treadmill","track":["m","inc","spd"],"sets":[{"s":1530,"m":2100,"inc":8,"spd":5.5}]}
 
 To set or update the PLAN:
 {"type":"gym-import","plan":{"name":"...","loadNote":"...","rules":["..."],"stopRules":["..."],"workouts":[{"id":"a","name":"Workout A","subtitle":"","intent":"one line on what this workout is for","exercises":[{"id":"goblet_squat","name":"Goblet Squat","mode":"reps","sets":3,"repsMin":8,"repsMax":10,"weight":16,"increment":1,"rest":90,"perSide":false,"bodyweight":false,"cue":"one short mid-set reminder","steps":["how to do it, one step per entry"],"watchFor":["common faults, one per entry"],"progression":"when and how to make it harder"}]}}}
@@ -426,6 +434,7 @@ To set or update the PLAN:
 - Plan-level: "loadNote" = a temporary caution shown at the start of every session (e.g. reduced load after a break); "rules" = the plan's progression rules; "stopRules" = when to stop or regress.
 - "plan" REPLACES all workouts. To append instead, use {"type":"gym-import","workouts":[...]}. Sending "plan" with only loadNote/rules/stopRules (no workouts) updates just those.
 - mode "time" uses "secs", mode "dist" uses "dist" (metres) instead of repsMin/repsMax.
+- Cardio: {"id":"rower","name":"Rower","mode":"cardio","machine":"rower","track":["m","lvl","spm"],"goal":"dist","dist":2000,"sets":1,"rest":120}. "machine" is treadmill, bike, rower or other (other for anything else, e.g. horse riding). "track" lists what to record (from m, inc, spd, lvl, spm; time is always recorded). "goal" is "time" (target in "secs", in seconds: 30 min = 1800) or "dist" (target in "dist", in metres: 5 km = 5000); if the plan gives no target, send null for it. No weight fields. Each distinct activity is its own exercise with its own id (a treadmill walk and a treadmill run are two exercises). Cardio has no weight progression; don't invent targets the plan doesn't give.
 
 Known exercises: ${ex || "none yet"}.
 Workouts: ${state.plan.workouts.map((w) => w.id + " = " + w.name + " (" + w.exercises.map((x) => x.name).join(", ") + ")").join("; ") || "none yet"}.`;
