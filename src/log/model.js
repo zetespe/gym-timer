@@ -1,10 +1,60 @@
 // Pure helpers over the log state: formatting, history lookups, the next-weight
 // rule, the quick-log parser, plan-text parser and export/import.
-import { normalizeSession, migrateWorkout, slug, uid, today, strList, emptyState } from "./store";
+import { normalizeSession, migrateWorkout, slug, uid, today, strList, emptyState, MACHINES, CARDIO_TRACK_KEYS } from "./store";
 
 export const valKey = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "r");
 export const valUnit = (mode) => (mode === "time" ? "s" : mode === "dist" ? "m" : "reps");
 export const setVal = (set, mode) => set[valKey(mode)];
+
+// ---- cardio ----
+// A cardio entry records blocks (one for a steady session): always a time,
+// plus the fields chosen for that exercise. Time stays in seconds and distance
+// in metres like the other modes; only the display uses m:ss and km.
+export { MACHINES };
+export const CARDIO_FIELDS = {
+  m: { label: "Distance" },
+  inc: { label: "Incline", unit: "% incline", step: 0.5 },
+  spd: { label: "Speed", unit: "km/h", step: 0.1 },
+  lvl: { label: "Level", unit: "level", step: 1 },
+  spm: { label: "Stroke rate", unit: "spm", step: 1 },
+};
+export const CARDIO_KEYS = ["s", ...CARDIO_TRACK_KEYS];
+// Rowers count metres; everything else counts kilometres. Distance is stored
+// in metres; these convert to and from what the steppers show.
+export const distUnit = (machine) => (machine === "rower" ? "m" : "km");
+export const toDisplayDist = (m, machine) => (m == null ? null : distUnit(machine) === "km" ? m / 1000 : m);
+export const fromDisplayDist = (v, machine) => (v == null ? null : distUnit(machine) === "km" ? Math.round(v * 1000) : v);
+export function fmtDist(m, machine) {
+  if (m == null) return "";
+  return distUnit(machine) === "m" ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`;
+}
+export function fmtTime(sec) {
+  if (sec == null) return "";
+  const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+// Totals over the blocks: time and distance add up, the settings average.
+export function cardioTotals(sets) {
+  const out = {};
+  for (const k of CARDIO_KEYS) {
+    const vals = sets.map((st) => st[k]).filter((v) => v != null);
+    if (!vals.length) continue;
+    const sum = vals.reduce((a, b) => a + b, 0);
+    out[k] = k === "s" || k === "m" ? sum : Math.round((sum / vals.length) * 10) / 10;
+  }
+  return out;
+}
+function fmtCardio(e) {
+  const t = cardioTotals(e.sets || []);
+  const parts = [];
+  if (t.s != null) parts.push(fmtTime(t.s));
+  if (t.m != null) parts.push(fmtDist(t.m, e.machine));
+  if (t.inc != null) parts.push(`incline ${t.inc}%`);
+  if (t.spd != null) parts.push(`${t.spd} km/h`);
+  if (t.lvl != null) parts.push(`level ${t.lvl}`);
+  if (t.spm != null) parts.push(`${t.spm} spm`);
+  return parts.length ? parts.join(" · ") : e.notes ? "(" + e.notes + ")" : "—";
+}
 
 export function fmtDate(iso) {
   if (!iso) return "";
@@ -14,6 +64,7 @@ export function fmtDate(iso) {
 }
 
 export function fmtEntry(e, unit = "kg") {
+  if (e.mode === "cardio") return fmtCardio(e);
   const sets = (e.sets || []).filter((s) => setVal(s, e.mode) != null || s.w != null);
   if (!sets.length) return e.notes ? "(" + e.notes + ")" : "—";
   const suffix = e.mode === "time" ? " s" : e.mode === "dist" ? " m" : "";
@@ -29,6 +80,10 @@ export function fmtEntry(e, unit = "kg") {
 // One shared "3×8–10 / side · 16 kg · rest 90 s" formatter for a plan
 // exercise; every screen that shows a target uses this.
 export function fmtTarget(x, unit) {
+  if (x.mode === "cardio") {
+    const goal = x.goal === "dist" ? fmtDist(x.dist, x.machine) : fmtTime(x.secs);
+    return (goal ? `Goal ${goal} · ` : "") + (MACHINES[x.machine] || MACHINES.other).label + (x.rest ? ` · rest ${x.rest} s` : "");
+  }
   const val = x.mode === "reps" ? (x.repsMin === x.repsMax ? x.repsMin : x.repsMin + "–" + x.repsMax) : x.mode === "time" ? x.secs + " s" : x.dist + " m";
   let out = `${x.sets}×${val}${x.perSide ? " / side" : ""}`;
   if (x.bodyweight) out += " · bodyweight";
@@ -45,7 +100,9 @@ export function historyFor(sessions, exId, opts = {}) {
   const out = [];
   for (const s of sortedSessions(sessions)) {
     if (opts.excludeId && s.id === opts.excludeId) continue;
-    for (const e of s.exercises) if (e.exId === exId && e.sets && e.sets.length) out.push({ date: s.date, session: s.name, entry: e });
+    // `mode` keeps an exercise switched to another type from reading the old
+    // type's numbers (25 minutes of cardio as a 1530 s hold).
+    for (const e of s.exercises) if (e.exId === exId && e.sets && e.sets.length && (!opts.mode || (e.mode || "reps") === opts.mode)) out.push({ date: s.date, session: s.name, entry: e });
   }
   return out;
 }
@@ -53,17 +110,18 @@ export const lastFor = (sessions, exId, opts) => historyFor(sessions, exId, opts
 
 export function allExercises(state) {
   const m = new Map();
-  for (const w of state.plan.workouts) for (const x of w.exercises) if (!m.has(x.id)) m.set(x.id, { id: x.id, name: x.name, mode: x.mode, perSide: x.perSide, bodyweight: x.bodyweight });
-  for (const s of state.sessions) for (const e of s.exercises) if (!m.has(e.exId)) m.set(e.exId, { id: e.exId, name: e.name, mode: e.mode, perSide: e.perSide, bodyweight: e.bodyweight });
+  for (const w of state.plan.workouts) for (const x of w.exercises) if (!m.has(x.id)) m.set(x.id, { id: x.id, name: x.name, mode: x.mode, perSide: x.perSide, bodyweight: x.bodyweight, machine: x.machine, track: x.track });
+  for (const s of state.sessions) for (const e of s.exercises) if (!m.has(e.exId)) m.set(e.exId, { id: e.exId, name: e.name, mode: e.mode, perSide: e.perSide, bodyweight: e.bodyweight, machine: e.machine, track: e.track });
   return [...m.values()];
 }
 
 // ---- next-weight rule (double progression) ----
 // Returns { kind: 'up'|'repeat'|'down'|'none', weight, text }.
 export function suggest(state, ex) {
-  const hist = historyFor(state.sessions, ex.id);
+  const hist = historyFor(state.sessions, ex.id, { mode: ex.mode || "reps" });
   const unit = state.settings.unit;
-  if (!hist.length) return { kind: "none", text: "" };
+  // Cardio has no weight to progress; the session shows last time instead.
+  if (!hist.length || ex.mode === "cardio") return { kind: "none", text: "" };
   const last = hist[0].entry;
   const k = valKey(ex.mode);
   const target = ex.mode === "reps" ? ex.repsMax : ex.mode === "time" ? ex.secs : ex.dist;
@@ -111,7 +169,20 @@ const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st",
 // ---- session drafts ----
 export function newEntry(state, x) {
   const e = { exId: x.id, name: x.name, mode: x.mode || "reps", perSide: !!x.perSide, bodyweight: !!x.bodyweight, rest: x.rest ?? 90, notes: "", sets: [] };
-  const last = lastFor(state.sessions, x.id);
+  const last = lastFor(state.sessions, x.id, { mode: e.mode });
+  if (e.mode === "cardio") {
+    // One block. The goal fills its own field and the machine settings come
+    // from last time; time and distance are today's results, so they start
+    // empty unless they are the goal.
+    e.machine = MACHINES[x.machine] ? x.machine : "other";
+    e.track = x.track || MACHINES[e.machine].track;
+    e.bodyweight = true;
+    const ls = last ? last.entry.sets[0] || {} : {};
+    const set = { done: false, s: x.goal === "time" ? x.secs ?? null : null };
+    for (const k of e.track) set[k] = k === "m" ? (x.goal === "dist" ? x.dist ?? null : null) : ls[k] ?? null;
+    e.sets.push(set);
+    return e;
+  }
   const sug = suggest(state, x);
   const k = valKey(e.mode);
   // Rows follow the plan; last time's numbers fill the rows that existed then.
@@ -132,8 +203,13 @@ export function newEntry(state, x) {
 export function draftHasProgress(d) {
   if (!d) return false;
   if ((d.notes || "").trim()) return true;
-  return (d.exercises || []).some((e) => (e.notes || "").trim() || (e.sets || []).some((s) => s.done));
+  return (d.exercises || []).some((e) => (e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s)));
 }
+
+// A ticked set counts. So does a cardio block whose time or distance was typed
+// in: those start empty (bar the goal), so a typed value is a real result even
+// when the ✓ was never tapped.
+const setCounts = (e, s) => s.done || (e.mode === "cardio" && !!s.typed);
 
 export function startDraft(state, workout) {
   const d = { id: today() + "-" + uid(), date: today(), workoutId: workout ? workout.id : "free", name: workout ? workout.name : "Free session", startedAt: new Date().toISOString(), notes: "", exercises: [] };
@@ -144,9 +220,11 @@ export function startDraft(state, workout) {
 export function finalizeDraft(d) {
   const out = { id: d.id, date: d.date, workoutId: d.workoutId, name: d.name, startedAt: d.startedAt, endedAt: new Date().toISOString(), notes: d.notes || "", exercises: [] };
   for (const e of d.exercises) {
-    const sets = e.sets.filter((s) => s.done).map((s) => { const o = {}; if (s.w != null) o.w = s.w; const k = valKey(e.mode); if (s[k] != null) o[k] = s[k]; if (s.note) o.note = s.note; return o; });
+    const keys = e.mode === "cardio" ? CARDIO_KEYS : [valKey(e.mode)];
+    const sets = e.sets.filter((s) => setCounts(e, s)).map((s) => { const o = {}; if (s.w != null) o.w = s.w; for (const k of keys) if (s[k] != null) o[k] = s[k]; if (s.note) o.note = s.note; return o; });
     if (!sets.length && !e.notes) continue;
     const entry = { exId: e.exId, name: e.name, mode: e.mode, sets, perSide: e.perSide, bodyweight: e.bodyweight, notes: e.notes || "" };
+    if (e.mode === "cardio") { entry.machine = e.machine; entry.track = e.track; }
     out.exercises.push(entry);
   }
   return out;
@@ -175,6 +253,7 @@ const num = (v) => { const n = parseFloat(String(v).replace(",", ".")); return i
 export function parseQuickLog(text, entries, unit = "kg") {
   const ex = findExercise(text, entries);
   if (!ex) return { error: "Which exercise? Start with its name, e.g. “goblet 16 8 8 7”." };
+  if (ex.mode === "cardio") return { error: `Fill in ${ex.name} on its card; quick log doesn't do cardio yet.` };
   let t = text.toLowerCase();
   let weight = null;
   const wm = t.match(/(\d+(?:[.,]\d+)?)\s*(kg|kilo|kilos|kilogram|lb|lbs)/);

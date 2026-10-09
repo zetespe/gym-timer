@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useLog, patch, setState, getState, slug } from "./store";
-import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises } from "./model";
-import { Stepper, toast, ask, confirmAction } from "./ui";
+import { useLog, patch, setState, getState, slug, migrateExercise } from "./store";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
+import { Stepper, TimeField, toast, ask, confirmAction } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
 import Technique from "./Technique";
@@ -58,7 +58,8 @@ export default function Session({ onFinished, onExit }) {
 
   const mut = (fn) => patch((s) => { fn(s.draft); });
   const startRest = (e) => { if (S.settings.restTimer && e.rest > 0) { restPrev.current = e.rest; setRest({ total: e.rest, endAt: Date.now() + e.rest * 1000, left: e.rest, name: e.name }); } };
-  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { dr.exercises[ei].sets[si].done = !was; }); if (!was) startRest(d.exercises[ei]); };
+  // Un-ticking also drops a cardio block's "typed" mark: an explicit untick means don't save it.
+  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { const st = dr.exercises[ei].sets[si]; st.done = !was; if (was) delete st.typed; }); if (!was) startRest(d.exercises[ei]); };
 
   const onQuick = (text) => {
     const r = parseQuickLog(text, d.exercises, unit);
@@ -89,8 +90,11 @@ export default function Session({ onFinished, onExit }) {
         const v = await ask({ title: "Which one?", buttons: [...matches.map((m) => ({ label: m.name, value: m })), { label: `+ New: “${name}”`, value: "new" }], back: "Back", stack: true });
         if (v == null) step = "name"; else if (v === "new") step = "mode"; else x = v;
       } else if (step === "mode") {
-        const v = await ask({ title: "Measured in?", buttons: [{ label: "Reps", value: "reps" }, { label: "Time", value: "time" }, { label: "Distance", value: "dist" }], back: "Back", stack: true });
-        if (v == null) step = matches.length ? "pick" : "name"; else { mode = v; step = "weight"; }
+        const v = await ask({ title: "Measured in?", buttons: [{ label: "Reps", value: "reps" }, { label: "Time", value: "time" }, { label: "Distance", value: "dist" }, { label: "Cardio", value: "cardio" }], back: "Back", stack: true });
+        if (v == null) step = matches.length ? "pick" : "name"; else { mode = v; step = v === "cardio" ? "machine" : "weight"; }
+      } else if (step === "machine") {
+        const v = await ask({ title: "Which machine?", buttons: Object.entries(MACHINES).map(([k, m]) => ({ label: m.label, value: k })), back: "Back", stack: true });
+        if (v == null) step = "mode"; else x = migrateExercise({ id: slug(name), name, mode: "cardio", machine: v });
       } else {
         const v = await ask({ title: "Weights or bodyweight?", buttons: [{ label: "Weights", value: false }, { label: "Bodyweight", value: true }], back: "Back", stack: true });
         if (v == null) step = "mode";
@@ -116,7 +120,7 @@ export default function Session({ onFinished, onExit }) {
       {S.plan.loadNote && <div className="banner">{S.plan.loadNote}</div>}
       {d.exercises.map((e, ei) => {
         const px = workout ? workout.exercises.find((x) => x.id === e.exId) : null;
-        const last = lastFor(S.sessions, e.exId, { excludeId: d.id });
+        const last = lastFor(S.sessions, e.exId, { excludeId: d.id, mode: e.mode });
         const sug = px ? suggest(S, px) : { kind: "none", text: "" };
         const allDone = e.sets.length > 0 && e.sets.every((s) => s.done);
         const k = valKey(e.mode);
@@ -129,7 +133,16 @@ export default function Session({ onFinished, onExit }) {
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
             {px && px.cue && <div className="cue">{px.cue}</div>}
             {px && <Technique x={px} sug={sug} />}
-            <div className="sets">
+            {e.mode === "cardio" ? e.sets.map((s, si) => (
+              <div className="cgrid" key={si}>
+                <TimeField value={s.s} onChange={(v) => mut((dr) => { Object.assign(dr.exercises[ei].sets[si], { s: v, typed: true }); })} />
+                {e.track.map((k) => k === "m"
+                  ? <Stepper key={k} value={toDisplayDist(s.m, e.machine)} step={distUnit(e.machine) === "km" ? 0.1 : 50} unit={distUnit(e.machine)}
+                      onChange={(v) => mut((dr) => { Object.assign(dr.exercises[ei].sets[si], { m: fromDisplayDist(v, e.machine), typed: true }); })} />
+                  : <Stepper key={k} value={s[k]} step={CARDIO_FIELDS[k].step} unit={CARDIO_FIELDS[k].unit} inputMode={CARDIO_FIELDS[k].step < 1 ? "decimal" : "numeric"} onChange={(v) => mut((dr) => { dr.exercises[ei].sets[si][k] = v; })} />)}
+                <button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="done">✓</button>
+              </div>
+            )) : <div className="sets">
               {e.sets.map((s, si) => (
                 <div className={"set" + (hasW ? "" : " nw")} key={si}>
                   <div className="n">{si + 1}</div>
@@ -138,11 +151,12 @@ export default function Session({ onFinished, onExit }) {
                   <div><button className={"check" + (s.done ? " on" : "")} onClick={() => toggleSet(ei, si)} aria-label="set done">✓</button></div>
                 </div>
               ))}
-            </div>
+            </div>}
             <div className="ex-actions">
-              <button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(e); }}>✓ All as shown</button>
+              {/* Cardio is one block for now; interval blocks come later. */}
+              {e.mode !== "cardio" && <><button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(e); }}>✓ All as shown</button>
               <button className="btn sm" onClick={() => mut((dr) => { const ss = dr.exercises[ei].sets; const l = ss[ss.length - 1]; ss.push(l ? { ...l, done: false } : { done: false, w: e.bodyweight ? undefined : 0, [k]: 8 }); })}>+ set</button>
-              {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}
+              {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}</>}
               {e.mode === "time" && <button className="btn sm" onClick={() => setTimerFor(ei)}>⏱ Timer</button>}
               <button className="btn sm ghost danger" onClick={async () => { if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}>remove</button>
             </div>
@@ -203,6 +217,9 @@ export default function Session({ onFinished, onExit }) {
               const secs = [...Array.from({ length: reps }, () => hold), ...(partial > 0 ? [partial] : [])];
               if (secs.length) mut((dr) => { const ex = dr.exercises[timerFor]; const old = ex.sets; const kept = old.filter((s) => s.done); ex.sets = [...kept, ...secs.map((sec, i) => { const o = { done: true, s: sec }; const w = old[kept.length + i]?.w ?? old[old.length - 1]?.w; if (!ex.bodyweight && w != null) o.w = w; return o; })]; });
               setTimerFor(null);
+              // The timer runs no rest after the last set, so the rest before
+              // the next exercise starts here, as it does for a manual tick.
+              if (secs.length) startRest(d.exercises[timerFor]);
               if (secs.length) toast(`${secs.join(", ")} s recorded for ${d.exercises[timerFor].name}`);
             }}
           />

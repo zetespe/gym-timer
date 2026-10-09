@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, matchExercises, findExercise } from "./model";
-import { emptyState, migrate, strList } from "./store";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, lastFor, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
+import { emptyState, migrate, strList, migrateExercise, normalizeSession } from "./store";
 
 describe("technique fields and training rules", () => {
   const planImport = {
@@ -265,5 +265,79 @@ describe("matchExercises", () => {
   });
   it("findExercise keeps picking the single best match", () => {
     expect(findExercise("goblet 16 8 8 7", pool).id).toBe("squat");
+  });
+});
+
+describe("cardio", () => {
+  const walk = migrateExercise({ id: "treadmill_walk", name: "Treadmill walk", mode: "cardio", machine: "treadmill" });
+  const logged = (exId, mode, sets, extra = {}) => normalizeSession({ id: exId + mode, date: "2026-10-01", exercises: [{ exId, name: exId, mode, sets, ...extra }] });
+
+  it("shows time as m:ss, or h:mm:ss past an hour", () => {
+    expect(fmtTime(1530)).toBe("25:30");
+    expect(fmtTime(65)).toBe("1:05");
+    expect(fmtTime(3723)).toBe("1:02:03");
+  });
+
+  it("sets up each machine with its own fields and a time goal", () => {
+    expect(walk).toMatchObject({ mode: "cardio", machine: "treadmill", track: ["m", "inc", "spd"], goal: "time", secs: 1800, bodyweight: true, sets: 1 });
+    expect(migrateExercise({ name: "Rower", mode: "cardio", machine: "rower" }).track).toEqual(["m", "lvl", "spm"]);
+    expect(migrateExercise({ name: "Horse riding", mode: "cardio", machine: "pony" }).machine).toBe("other");
+    expect(fmtTarget(walk, "kg")).toBe("Goal 30:00 · Treadmill · rest 90 s");
+    expect(fmtTarget(migrateExercise({ ...walk, goal: "dist", dist: 3000 }), "kg")).toBe("Goal 3.00 km · Treadmill · rest 90 s");
+  });
+
+  it("a distance goal always records distance", () => {
+    const bike = migrateExercise({ name: "Bike", mode: "cardio", machine: "bike", track: ["lvl"], goal: "dist" });
+    expect(bike.track).toEqual(["m", "lvl"]);
+    expect(bike.dist).toBe(3000);
+  });
+
+  it("prefills the goal and last time's settings, never last time's results", () => {
+    const st = emptyState();
+    expect(newEntry(st, walk).sets).toEqual([{ done: false, s: 1800, m: null, inc: null, spd: null }]);
+    st.sessions.push(logged("treadmill_walk", "cardio", [{ s: 1530, m: 2100, inc: 8, spd: 5.5 }], { machine: "treadmill", track: ["m", "inc", "spd"] }));
+    expect(newEntry(st, walk).sets[0]).toEqual({ done: false, s: 1800, m: null, inc: 8, spd: 5.5 });
+    // Distance goal: the time is today's result, so it starts empty.
+    expect(newEntry(st, migrateExercise({ ...walk, goal: "dist", dist: 2000 })).sets[0]).toEqual({ done: false, s: null, m: 2000, inc: 8, spd: 5.5 });
+    expect(suggest(st, walk).kind).toBe("none");
+  });
+
+  it("ignores history logged under another type", () => {
+    const st = emptyState();
+    st.sessions.push(logged("plank", "cardio", [{ s: 1530 }], { machine: "other" }));
+    const hold = migrateExercise({ id: "plank", name: "Plank", mode: "time", secs: 30, sets: 2 });
+    expect(newEntry(st, hold).sets.map((x) => x.s)).toEqual([30, 30]);
+    expect(suggest(st, hold).kind).toBe("none");
+  });
+
+  it("keeps a typed cardio result even when the ✓ wasn't tapped", () => {
+    const d = { id: "x", date: "2026-10-06", workoutId: "free", name: "Free", exercises: [newEntry(emptyState(), walk)] };
+    expect(draftHasProgress(d)).toBe(false); // the prefilled goal alone is not a result
+    expect(finalizeDraft(d).exercises).toEqual([]);
+    Object.assign(d.exercises[0].sets[0], { s: 1530, m: 2100, typed: true });
+    expect(draftHasProgress(d)).toBe(true);
+    expect(finalizeDraft(d).exercises[0].sets).toEqual([{ s: 1530, m: 2100 }]);
+  });
+
+  it("'last time' only shows an entry of the same type", () => {
+    const sessions = [logged("plank", "time", [{ s: 30 }])];
+    expect(lastFor(sessions, "plank", { mode: "cardio" })).toBe(null);
+    expect(lastFor(sessions, "plank", { mode: "time" }).entry.sets).toEqual([{ s: 30 }]);
+  });
+
+  it("saves every field and shows one total line", () => {
+    const d = { id: "x", date: "2026-10-06", workoutId: "free", name: "Free", exercises: [newEntry(emptyState(), walk)] };
+    Object.assign(d.exercises[0].sets[0], { done: true, s: 1530, m: 2100, inc: 8, spd: 5.5 });
+    const e = finalizeDraft(d).exercises[0];
+    expect(e).toMatchObject({ mode: "cardio", machine: "treadmill", sets: [{ s: 1530, m: 2100, inc: 8, spd: 5.5 }] });
+    expect(fmtEntry(e)).toBe("25:30 · 2.10 km · incline 8% · 5.5 km/h");
+    expect(fmtEntry({ ...e, machine: "rower", sets: [{ s: 600, m: 2000, lvl: 6, spm: 24 }] })).toBe("10:00 · 2000 m · level 6 · 24 spm");
+  });
+
+  it("keeps cardio through a backup round trip", () => {
+    const out = migrate(JSON.parse(JSON.stringify({ version: 3, plan: { workouts: [{ id: "w", name: "W", exercises: [walk] }] },
+      sessions: [{ id: "a", date: "2026-10-01", exercises: [{ exId: "bike", name: "Bike", mode: "cardio", machine: "bike", track: ["m", "lvl"], sets: [{ s: 1200, m: 8000, lvl: 7 }] }] }] })));
+    expect(out.plan.workouts[0].exercises[0]).toMatchObject({ mode: "cardio", machine: "treadmill", track: ["m", "inc", "spd"] });
+    expect(out.sessions[0].exercises[0]).toMatchObject({ mode: "cardio", machine: "bike", sets: [{ s: 1200, m: 8000, lvl: 7 }] });
   });
 });

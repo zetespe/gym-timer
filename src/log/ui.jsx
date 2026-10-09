@@ -78,6 +78,32 @@ export function Stepper({ value, onChange, step = 1, unit, inputMode = "decimal"
   );
 }
 
+// Minutes and seconds in two boxes, so a number pad can't be misread (is
+// "22.5" 22:05 or 22½ minutes?). Minutes may go past 59. Empty (or 0:00)
+// clears the time; an impossible entry snaps back to the old value.
+const splitTime = (v) => (v == null ? ["", ""] : [String(Math.floor(v / 60)), String(Math.round(v % 60)).padStart(2, "0")]);
+export function TimeField({ value, onChange }) {
+  const [[mm, ss], setParts] = useState(splitTime(value));
+  useEffect(() => { setParts(splitTime(value)); }, [value]);
+  const commit = () => {
+    if (!/^\d*$/.test(mm) || !/^\d*$/.test(ss) || +ss > 59) { setParts(splitTime(value)); return; }
+    // 0:00 is never a result: emptying the boxes one at a time passes through it.
+    const v = (+mm || 0) * 60 + (+ss || 0) || null;
+    if (v === value) setParts(splitTime(value)); else onChange(v);
+  };
+  const box = (val, i, label, ph) => (
+    // Focus selects the box, so typing replaces "00" instead of hitting the length limit.
+    <input inputMode="numeric" aria-label={label} placeholder={ph} value={val} maxLength={i ? 2 : 3} onFocus={(e) => e.target.select()}
+      onChange={(e) => setParts(i ? [mm, e.target.value.trim()] : [e.target.value.trim(), ss])} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }} />
+  );
+  return (
+    <div>
+      <div className="timefield">{box(mm, 0, "minutes", "min")}<span>:</span>{box(ss, 1, "seconds", "sec")}</div>
+      <div className="unitlab">min : sec</div>
+    </div>
+  );
+}
+
 export function Field({ label, children }) {
   return <div className="field"><label>{label}</label>{children}</div>;
 }
