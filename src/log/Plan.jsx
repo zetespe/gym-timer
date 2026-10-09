@@ -110,7 +110,11 @@ function WorkoutEditor({ w, unit, onBack }) {
             ))}
           </Field>
           <div className="grid2">
-            <Field label="Goal"><select className="text" value={x.goal} onChange={(e) => up((ww) => { ww.exercises[exIdx] = migrateExercise({ ...ww.exercises[exIdx], goal: e.target.value }); })}>
+            <Field label="Goal"><select className="text" value={x.goal} onChange={(e) => up((ww) => {
+              // A new goal type starts from its default target unless it already has one.
+              const ex = ww.exercises[exIdx], k = e.target.value === "dist" ? "dist" : "secs";
+              ww.exercises[exIdx] = migrateExercise({ ...ex, goal: e.target.value, [k]: ex[k] ?? undefined });
+            })}>
               <option value="time">Time</option><option value="dist">Distance</option></select></Field>
             {x.goal === "time"
               ? <Field label="Target time"><TimeField value={x.secs} onChange={(v) => set("secs", v)} /></Field>
