@@ -62,6 +62,8 @@ Rules:
   whole session: `s` = total time in seconds (always), plus only the fields
   that were recorded: `m` = distance in metres, `inc` = incline %, `spd` =
   speed km/h, `lvl` = level or resistance, `spm` = strokes per minute.
+  Always include `machine` and `track`, also for known exercises. Anything
+  else (heart rate, elevation, how it felt) goes in the exercise `notes`.
 - `perSide: true` when numbers are per side; `bodyweight: true` hides the weight field.
 - `workoutId` is the plan workout id, or `free`.
 
@@ -103,8 +105,10 @@ Cardio plan fields:
   treadmill `m, inc, spd`; bike `m, lvl`; rower `m, lvl, spm`; other `m`.
 - `track` — what to record, from `m`, `inc`, `spd`, `lvl`, `spm`. Time is
   always recorded.
-- `goal` — `time` (target in `secs`) or `dist` (target in `dist`, metres).
-  Both are recorded either way; a distance goal always records distance.
+- `goal` — `time` (target in `secs`, in seconds: 30 min = 1800) or `dist`
+  (target in `dist`, in metres: 5 km = 5000). Send `null` for a target the
+  plan doesn't give. Both are recorded either way; a distance goal always
+  records distance.
 - `sets` is 1 (one block per session). No weight fields.
 - Each distinct activity is its own exercise with its own `id`, so its
   history stays separate: a treadmill walk and a treadmill run are two
