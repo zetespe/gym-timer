@@ -286,6 +286,13 @@ describe("cardio", () => {
     expect(fmtTarget(migrateExercise({ ...walk, goal: "dist", dist: 3000 }), "kg")).toBe("Goal 3.00 km · Treadmill · rest 90 s");
   });
 
+  it("a cleared target stays cleared; only a target never set gets the default", () => {
+    const noGoal = migrateExercise({ ...walk, secs: null });
+    expect(migrateExercise({ ...noGoal, machine: "bike", track: null }).secs).toBe(null);
+    expect(migrateExercise(JSON.parse(JSON.stringify(noGoal))).secs).toBe(null); // survives a backup
+    expect(migrateExercise({ ...walk, goal: "dist", dist: undefined }).dist).toBe(3000);
+  });
+
   it("a distance goal always records distance", () => {
     const bike = migrateExercise({ name: "Bike", mode: "cardio", machine: "bike", track: ["lvl"], goal: "dist" });
     expect(bike.track).toEqual(["m", "lvl"]);
