@@ -39,7 +39,10 @@ the first `{...}` is parsed.
         { "exId": "dead_hang", "name": "Dead Hang", "mode": "time", "bodyweight": true,
           "sets": [ { "s": 40 }, { "s": 30 }, { "s": 25 } ] },
         { "exId": "suitcase_carry", "name": "Suitcase Carry", "mode": "dist", "perSide": true,
-          "sets": [ { "w": 18, "m": 30 }, { "w": 18, "m": 30 }, { "w": 18, "m": 30 } ] }
+          "sets": [ { "w": 18, "m": 30 }, { "w": 18, "m": 30 }, { "w": 18, "m": 30 } ] },
+        { "exId": "treadmill_walk", "name": "Treadmill walk", "mode": "cardio",
+          "machine": "treadmill", "track": [ "m", "inc", "spd" ],
+          "sets": [ { "s": 1530, "m": 2100, "inc": 8, "spd": 5.5 } ] }
       ]
     }
   ]
@@ -50,8 +53,15 @@ Rules:
 
 - `sessions[]`: same `id` updates an existing session, a new `id` adds one.
   Use `YYYY-MM-DD-<short>` ids.
-- `mode`: `reps` (field `r`), `time` (seconds, `s`), `dist` (metres, `m`).
-  `w` is the weight in the user's unit; omit for bodyweight. One object per set.
+- `mode`: `reps` (field `r`), `time` (seconds, `s`), `dist` (metres, `m`),
+  or `cardio` (below). `w` is the weight in the user's unit; omit for
+  bodyweight. One object per set.
+- `cardio` is for treadmill, bike, rower and any other cardio machine or
+  activity. The exercise carries `machine` (`treadmill`, `bike`, `rower` or
+  `other`) and `track` (what is recorded). It has one set object for the
+  whole session: `s` = total time in seconds (always), plus only the fields
+  that were recorded: `m` = distance in metres, `inc` = incline %, `spd` =
+  speed km/h, `lvl` = level or resistance, `spm` = strokes per minute.
 - `perSide: true` when numbers are per side; `bodyweight: true` hides the weight field.
 - `workoutId` is the plan workout id, or `free`.
 
@@ -79,10 +89,26 @@ To change the plan, send `plan` (replaces all workouts) or `workouts` (appends):
       "watchFor": [ "Chest collapsing forward", "Knees caving in", "Heels lifting" ],
       "progression": "2s pause at the bottom, then 18–20 kg" },
     { "id": "dead_hang", "name": "Dead Hang", "mode": "time", "sets": 3, "secs": 30,
-      "bodyweight": true, "rest": 90 }
+      "bodyweight": true, "rest": 90 },
+    { "id": "rower", "name": "Rower", "mode": "cardio", "machine": "rower",
+      "track": [ "m", "lvl", "spm" ], "goal": "dist", "dist": 2000, "sets": 1, "rest": 120 }
   ] }
 ] } }
 ```
+
+Cardio plan fields:
+
+- `machine` — `treadmill`, `bike`, `rower` or `other` (anything else, e.g.
+  horse riding). It sets the default `track` when `track` is omitted:
+  treadmill `m, inc, spd`; bike `m, lvl`; rower `m, lvl, spm`; other `m`.
+- `track` — what to record, from `m`, `inc`, `spd`, `lvl`, `spm`. Time is
+  always recorded.
+- `goal` — `time` (target in `secs`) or `dist` (target in `dist`, metres).
+  Both are recorded either way; a distance goal always records distance.
+- `sets` is 1 (one block per session). No weight fields.
+- Each distinct activity is its own exercise with its own `id`, so its
+  history stays separate: a treadmill walk and a treadmill run are two
+  exercises.
 
 Technique fields (all optional per exercise):
 
@@ -115,6 +141,8 @@ distance target) and `increment`:
 - fewer sets than planned, all at the target → same load, add the missing set
 - inside the range but not at the top → repeat the weight
 - below the bottom once → repeat; twice in a row → about 10% less
+
+Cardio has no weight progression: the app shows last time's result instead.
 
 The app shows the suggestion together with the plan's `progression` text in
 one block under "How to do it"; the user decides. Within a session the user
