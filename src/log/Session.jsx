@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLog, patch, setState, getState, slug, migrateExercise } from "./store";
-import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, entryHasResults, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, entryHasResults, sessionHasContent, SKIP_REASONS, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
 import { Stepper, TimeField, toast, ask, confirmAction } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
@@ -118,14 +118,32 @@ export default function Session({ onFinished, onExit }) {
     // State may have moved on while the questions were open.
     return newEntry(getState(), Object.assign({ sets: 3, repsMin: 8, repsMax: 8, rest: 90 }, x));
   };
+  // "Why?" for not following the plan: a quick reason, your own words, or
+  // none. Resolves with the reason ("" for none), or null when cancelled.
+  const askReason = async (title) => {
+    for (;;) {
+      const v = await ask({ title, text: "Saved in History.", buttons: [...SKIP_REASONS.map((r) => ({ label: r, value: r })), { label: "Other reason…", value: "other" }, { label: "No reason", value: "" }], back: "Cancel", stack: true });
+      if (v !== "other") return v;
+      const own = await ask({ title: "Your reason", input: { placeholder: "e.g. shoulder felt tight" }, buttons: [{ label: "Save", kind: "primary" }], back: "Back" });
+      if (own != null) return own;
+    }
+  };
+  const skipExercise = async (ei) => {
+    const why = await askReason(`Skip ${d.exercises[ei].name}?`);
+    if (why != null) mut((dr) => { Object.assign(dr.exercises[ei], { skipped: true, skipReason: why }); });
+  };
   const addExercise = async () => { const e = await pickExercise(); if (e) mut((dr) => { dr.exercises.push(e); }); };
-  // Swap puts the new exercise in the old one's place, for today only. Ticked
-  // sets of the old one would be lost, so that asks first.
+  // Swap puts the new exercise in the old one's place, for today only. Results
+  // on the old card would be lost, so that asks first. Replacing a plan
+  // exercise asks why, and History records it as swapped.
   const swapExercise = async (ei) => {
     const old = d.exercises[ei];
     if (entryHasResults(old) && !(await confirmAction(`Swap ${old.name}?`, "Its ticked sets, typed results and note won't be saved.", "Swap", "Keep"))) return;
+    const planned = old.swappedFrom || (old.fromPlan && { exId: old.exId, name: old.name, mode: old.mode, perSide: old.perSide, bodyweight: old.bodyweight });
+    const why = planned ? await askReason(`Why swap ${planned.name}?`) : "";
+    if (why == null) return;
     const e = await pickExercise();
-    if (e) mut((dr) => { dr.exercises[ei] = e; });
+    if (e) mut((dr) => { dr.exercises[ei] = planned ? { ...e, swappedFrom: { ...planned, reason: why || planned.reason || "" } } : e; });
   };
   // Rest is per exercise and can change mid-session; a countdown already
   // running for this exercise moves with it.
@@ -138,7 +156,7 @@ export default function Session({ onFinished, onExit }) {
 
   const finish = async () => {
     const out = finalizeDraft(d);
-    if (!out.exercises.length) { if (await confirmAction("Nothing ticked yet", "Discard this session?", "Discard", "Keep going")) { setState((s) => ({ ...s, draft: null })); onExit(); } return; }
+    if (!sessionHasContent(out)) { if (await confirmAction("Nothing ticked yet", "Discard this session?", "Discard", "Keep going")) { setState((s) => ({ ...s, draft: null })); onExit(); } return; }
     setState((s) => ({ ...s, sessions: [...s.sessions, out], draft: null, settings: { ...s.settings, sessionsSinceBackup: (s.settings.sessionsSinceBackup || 0) + 1 } }));
     onFinished(out.id);
   };
@@ -160,8 +178,9 @@ export default function Session({ onFinished, onExit }) {
         if (e.skipped) return (
           <div className="card skipped" key={ei}>
             <div className="hdr"><h3>{e.name}</h3><span className="pill">skipped</span></div>
-            <div className="row" style={{ marginTop: 6 }}><span className="muted small grow">Not saved today</span>
-              <button className="btn sm" onClick={() => mut((dr) => { delete dr.exercises[ei].skipped; })}>Undo</button></div>
+            <div className="row" style={{ marginTop: 6 }}><span className="muted small grow">Saved as skipped, no sets</span>
+              <button className="btn sm" onClick={() => mut((dr) => { delete dr.exercises[ei].skipped; delete dr.exercises[ei].skipReason; })}>Undo</button></div>
+            <textarea rows={1} placeholder="Why? (optional, saved in History)" value={e.skipReason || ""} onChange={(ev) => mut((dr) => { dr.exercises[ei].skipReason = ev.target.value; })} />
           </div>
         );
         return (
@@ -174,8 +193,9 @@ export default function Session({ onFinished, onExit }) {
                     <div className="menu-back" onClick={() => setMenuFor(null)} />
                     <div className="menu" role="menu">
                       <button role="menuitem" onClick={() => { setMenuFor(null); swapExercise(ei); }}><span className="ic">⇄</span><span>Swap<small>Do another exercise instead</small></span></button>
-                      <button role="menuitem" onClick={() => { setMenuFor(null); mut((dr) => { dr.exercises[ei].skipped = true; }); }}><span className="ic">⏭</span><span>Skip today<small>Grey it out, not saved</small></span></button>
-                      <button role="menuitem" className="red" onClick={async () => { setMenuFor(null); if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}><span className="ic">✕</span><span>Remove<small>Take it off today's list</small></span></button>
+                      <button role="menuitem" onClick={() => { setMenuFor(null); skipExercise(ei); }}><span className="ic">⏭</span><span>Skip today<small>Not doing it today; History notes why</small></span></button>
+                      {/* Plan exercises can't vanish from the record: Swap or Skip them. */}
+                      {!e.fromPlan && !e.swappedFrom && <button role="menuitem" className="red" onClick={async () => { setMenuFor(null); if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}><span className="ic">✕</span><span>Remove<small>Added by mistake? Take it off</small></span></button>}
                     </div>
                   </>}
                 </div>

@@ -148,6 +148,7 @@ export function normalizeSession(s) {
       perSide: !!e.perSide,
       bodyweight: !!e.bodyweight,
       notes: e.notes || "",
+      ...(["skipped", "swapped", "notdone"].includes(e.status) ? { status: e.status, reason: e.reason || "", ...(e.swappedFor ? { swappedFor: e.swappedFor } : {}) } : {}),
       sets: (e.sets || []).map((st) => {
         const o = {};
         if (st.w != null) o.w = +st.w;

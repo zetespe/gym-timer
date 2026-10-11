@@ -66,6 +66,10 @@ Rules:
   else (heart rate, elevation, how it felt) goes in the exercise `notes`.
 - `perSide: true` when numbers are per side; `bodyweight: true` hides the weight field.
 - `workoutId` is the plan workout id, or `free`.
+- An exercise that wasn't done has `status` and no sets: `skipped` or
+  `swapped` (with `swappedFor`, the exercise done instead) carry the user's
+  `reason` when given; `notdone` means a plan exercise left untouched. Read
+  these when judging how well the plan was followed.
 
 To change the plan, send `plan` (replaces all workouts) or `workouts` (appends):
 

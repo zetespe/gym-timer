@@ -14,7 +14,7 @@ export default function Exercise({ params, go }) {
     const f = w.exercises.find((x) => x.id === id);
     if (f) { px = f; wname = w.name; break; }
   }
-  const hist = id ? historyFor(S.sessions, id).slice(0, 10) : [];
+  const hist = id ? historyFor(S.sessions, id, { withStatus: true }).slice(0, 10) : [];
 
   if (!id || (!px && !hist.length)) {
     return (
