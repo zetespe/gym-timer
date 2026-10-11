@@ -204,8 +204,11 @@ export function newEntry(state, x) {
 export function draftHasProgress(d) {
   if (!d) return false;
   if ((d.notes || "").trim()) return true;
-  return (d.exercises || []).some((e) => !e.skipped && ((e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s))));
+  return (d.exercises || []).some((e) => !e.skipped && entryHasResults(e));
 }
+
+// Anything in a session entry that Finish would save: a note or a counted set.
+export const entryHasResults = (e) => !!(e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s));
 
 // A ticked set counts. So does a cardio block whose time or distance was typed
 // in: those start empty (bar the goal), so a typed value is a real result even

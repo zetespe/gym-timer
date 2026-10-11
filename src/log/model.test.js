@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, lastFor, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, entryHasResults, lastFor, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
 import { emptyState, migrate, strList, migrateExercise, normalizeSession } from "./store";
 
 describe("technique fields and training rules", () => {
@@ -360,5 +360,14 @@ describe("skip today", () => {
     expect(finalizeDraft(d).exercises).toEqual([]);
     d.exercises[1].sets[0].done = true;
     expect(finalizeDraft(d).exercises.map((e) => e.exId)).toEqual(["row"]);
+  });
+});
+
+describe("entryHasResults (what Swap must not drop silently)", () => {
+  it("counts ticked sets, typed cardio results and notes; not prefilled numbers", () => {
+    expect(entryHasResults({ mode: "reps", sets: [{ done: false, r: 8 }] })).toBe(false);
+    expect(entryHasResults({ mode: "reps", sets: [{ done: true, r: 8 }] })).toBe(true);
+    expect(entryHasResults({ mode: "cardio", sets: [{ done: false, s: 1200, typed: true }] })).toBe(true);
+    expect(entryHasResults({ mode: "reps", notes: "knee hurt", sets: [] })).toBe(true);
   });
 });

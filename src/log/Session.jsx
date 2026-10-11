@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLog, patch, setState, getState, slug, migrateExercise } from "./store";
-import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, entryHasResults, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
 import { Stepper, TimeField, toast, ask, confirmAction } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
@@ -65,20 +65,25 @@ export default function Session({ onFinished, onExit }) {
   const mins = Math.max(0, Math.round((now - new Date(d.startedAt)) / 60000));
 
   const mut = (fn) => patch((s) => { fn(s.draft); });
-  const startRest = (e) => { if (S.settings.restTimer && e.rest > 0) { restPrev.current = e.rest; setRest({ total: e.rest, endAt: Date.now() + e.rest * 1000, left: e.rest, name: e.name }); } };
+  // The countdown remembers its card (index and name), so changing rest on
+  // one card never shifts a countdown another card started.
+  const startRest = (ei) => { const e = d.exercises[ei]; if (S.settings.restTimer && e.rest > 0) { restPrev.current = e.rest; setRest({ total: e.rest, endAt: Date.now() + e.rest * 1000, left: e.rest, name: e.name, ei }); } };
   // Un-ticking also drops a cardio block's "typed" mark: an explicit untick means don't save it.
-  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { const st = dr.exercises[ei].sets[si]; st.done = !was; if (was) delete st.typed; }); if (!was) startRest(d.exercises[ei]); };
+  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { const st = dr.exercises[ei].sets[si]; st.done = !was; if (was) delete st.typed; }); if (!was) startRest(ei); };
 
   const onQuick = (text) => {
     const r = parseQuickLog(text, d.exercises.filter((x) => !x.skipped), unit);
     if (r.error) { toast(r.error, 3500); return; }
+    // Write into the card that was matched, not the first with that id: a
+    // skipped twin would swallow the sets.
+    const i = d.exercises.indexOf(r.ex);
     mut((dr) => {
-      const ex = dr.exercises.find((x) => x.exId === r.ex.exId);
+      const ex = dr.exercises[i];
       if (r.vals.length) ex.sets = r.vals.map((v) => { const o = { done: true }; if (!ex.bodyweight) o.w = r.weight != null ? r.weight : ex.sets[0] && ex.sets[0].w != null ? ex.sets[0].w : 0; o[r.k] = v; return o; });
       else if (r.weight != null) ex.sets.forEach((s) => { s.w = r.weight; s.done = true; });
       if (r.note) ex.notes = (ex.notes ? ex.notes + " " : "") + r.note;
     });
-    const ex = getState().draft.exercises.find((x) => x.exId === r.ex.exId);
+    const ex = getState().draft.exercises[i];
     toast("✓ " + ex.name + ": " + fmtEntry(ex, unit) + (r.note ? " · “" + r.note + "”" : ""), 3500);
   };
 
@@ -118,8 +123,7 @@ export default function Session({ onFinished, onExit }) {
   // sets of the old one would be lost, so that asks first.
   const swapExercise = async (ei) => {
     const old = d.exercises[ei];
-    const ticked = old.sets.filter((st) => st.done).length;
-    if (ticked && !(await confirmAction(`${old.name} has ${ticked} ticked set${ticked > 1 ? "s" : ""}`, "They won't be saved if you swap.", "Swap", "Keep"))) return;
+    if (entryHasResults(old) && !(await confirmAction(`Swap ${old.name}?`, "Its ticked sets, typed results and note won't be saved.", "Swap", "Keep"))) return;
     const e = await pickExercise();
     if (e) mut((dr) => { dr.exercises[ei] = e; });
   };
@@ -129,7 +133,7 @@ export default function Session({ onFinished, onExit }) {
     const e = d.exercises[ei], cur = e.rest ?? 90, next = Math.max(0, cur + delta);
     if (next === cur) return;
     mut((dr) => { dr.exercises[ei].rest = next; });
-    setRest((r) => (r && r.name === e.name ? { ...r, total: Math.max(1, r.total + next - cur), endAt: r.endAt + (next - cur) * 1000 } : r));
+    setRest((r) => (r && r.ei === ei && r.name === e.name ? { ...r, total: Math.max(1, r.total + next - cur), endAt: r.endAt + (next - cur) * 1000 } : r));
   };
 
   const finish = async () => {
@@ -151,7 +155,8 @@ export default function Session({ onFinished, onExit }) {
         const allDone = e.sets.length > 0 && e.sets.every((s) => s.done);
         const k = valKey(e.mode);
         const hasW = !e.bodyweight;
-        const targetText = px ? (px.target ? px.target + (px.rest ? ` · rest ${px.rest} s` : "") : fmtTarget(px, unit)) : "";
+        // Rest has its own control on the card, so the target line leaves it out.
+        const targetText = px ? px.target || fmtTarget({ ...px, rest: 0 }, unit) : "";
         if (e.skipped) return (
           <div className="card skipped" key={ei}>
             <div className="hdr"><h3>{e.name}</h3><span className="pill">skipped</span></div>
@@ -201,7 +206,7 @@ export default function Session({ onFinished, onExit }) {
             </div>}
             <div className="ex-actions">
               {/* Cardio is one block for now; interval blocks come later. */}
-              {e.mode !== "cardio" && <><button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(e); }}>✓ All as shown</button>
+              {e.mode !== "cardio" && <><button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(ei); }}>✓ All as shown</button>
               <button className="btn sm" onClick={() => mut((dr) => { const ss = dr.exercises[ei].sets; const l = ss[ss.length - 1]; ss.push(l ? { ...l, done: false } : { done: false, w: e.bodyweight ? undefined : 0, [k]: 8 }); })}>+ set</button>
               {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}</>}
               {e.mode === "time" && <button className="btn sm" onClick={() => setTimerFor(ei)}>⏱ Timer</button>}
@@ -267,7 +272,7 @@ export default function Session({ onFinished, onExit }) {
               setTimerFor(null);
               // The timer runs no rest after the last set, so the rest before
               // the next exercise starts here, as it does for a manual tick.
-              if (secs.length) startRest(d.exercises[timerFor]);
+              if (secs.length) startRest(timerFor);
               if (secs.length) toast(`${secs.join(", ")} s recorded for ${d.exercises[timerFor].name}`);
             }}
           />
