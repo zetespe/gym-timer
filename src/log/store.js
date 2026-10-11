@@ -99,8 +99,9 @@ export function migrateExercise(x) {
       ...shared, mode, machine, track, goal,
       perSide: false, bodyweight: true, sets: x.sets || 1,
       repsMin: null, repsMax: null, weight: null, increment: 1,
-      secs: x.secs ?? (goal === "time" ? 1800 : null),
-      dist: x.dist ?? (goal === "dist" ? 3000 : null),
+      // Only a target never set gets the default; null is one the user cleared.
+      secs: x.secs !== undefined ? x.secs : goal === "time" ? 1800 : null,
+      dist: x.dist !== undefined ? x.dist : goal === "dist" ? 3000 : null,
     };
   }
   const repsMin = x.repsMin ?? x.reps ?? (mode === "reps" ? 8 : null);

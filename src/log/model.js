@@ -117,8 +117,8 @@ export function allExercises(state) {
 
 // ---- next-weight rule (double progression) ----
 // Returns { kind: 'up'|'repeat'|'down'|'none', weight, text }.
-export function suggest(state, ex) {
-  const hist = historyFor(state.sessions, ex.id, { mode: ex.mode || "reps" });
+// `hist` lets a caller that already read this exercise's history pass it in.
+export function suggest(state, ex, hist = historyFor(state.sessions, ex.id, { mode: ex.mode || "reps" })) {
   const unit = state.settings.unit;
   // Cardio has no weight to progress; the session shows last time instead.
   if (!hist.length || ex.mode === "cardio") return { kind: "none", text: "" };
@@ -169,7 +169,8 @@ const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st",
 // ---- session drafts ----
 export function newEntry(state, x) {
   const e = { exId: x.id, name: x.name, mode: x.mode || "reps", perSide: !!x.perSide, bodyweight: !!x.bodyweight, rest: x.rest ?? 90, notes: "", sets: [] };
-  const last = lastFor(state.sessions, x.id, { mode: e.mode });
+  const hist = historyFor(state.sessions, x.id, { mode: e.mode });
+  const last = hist[0] || null;
   if (e.mode === "cardio") {
     // One block. The goal fills its own field and the machine settings come
     // from last time; time and distance are today's results, so they start
@@ -183,7 +184,7 @@ export function newEntry(state, x) {
     e.sets.push(set);
     return e;
   }
-  const sug = suggest(state, x);
+  const sug = suggest(state, x, hist);
   const k = valKey(e.mode);
   // Rows follow the plan; last time's numbers fill the rows that existed then.
   const count = x.sets || (last ? last.entry.sets.length : 3);
