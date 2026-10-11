@@ -50,6 +50,14 @@ export default function Session({ onFinished, onExit }) {
     document.addEventListener("visibilitychange", sync);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", sync); };
   }, [rest]);
+  // Which card's "⋯" menu is open. Escape closes it, like tapping outside.
+  const [menuFor, setMenuFor] = useState(null);
+  useEffect(() => {
+    if (menuFor == null) return;
+    const onKey = (ev) => { if (ev.key === "Escape") setMenuFor(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuFor]);
 
   if (!d) return null;
   const unit = S.settings.unit;
@@ -62,7 +70,7 @@ export default function Session({ onFinished, onExit }) {
   const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { const st = dr.exercises[ei].sets[si]; st.done = !was; if (was) delete st.typed; }); if (!was) startRest(d.exercises[ei]); };
 
   const onQuick = (text) => {
-    const r = parseQuickLog(text, d.exercises, unit);
+    const r = parseQuickLog(text, d.exercises.filter((x) => !x.skipped), unit);
     if (r.error) { toast(r.error, 3500); return; }
     mut((dr) => {
       const ex = dr.exercises.find((x) => x.exId === r.ex.exId);
@@ -74,14 +82,15 @@ export default function Session({ onFinished, onExit }) {
     toast("✓ " + ex.name + ": " + fmtEntry(ex, unit) + (r.note ? " · “" + r.note + "”" : ""), 3500);
   };
 
-  // One question at a time; Back returns to the previous question.
-  const addExercise = async () => {
+  // The add-exercise questions, one at a time (Back returns to the previous
+  // one). Resolves with a new session entry, or null when cancelled.
+  const pickExercise = async () => {
     const pool = allExercises(S);
     let step = "name", name = "", matches = [], mode = "reps", x = null;
     while (!x) {
       if (step === "name") {
         const v = await ask({ title: "Exercise name", input: { value: name, placeholder: "e.g. Goblet squat" }, buttons: [{ label: "Next", kind: "primary" }], back: "Cancel" });
-        if (v == null) return;
+        if (v == null) return null;
         name = v;
         x = pool.find((p) => p.name.toLowerCase() === name.toLowerCase());
         matches = x ? [] : matchExercises(name, pool);
@@ -102,8 +111,25 @@ export default function Session({ onFinished, onExit }) {
       }
     }
     // State may have moved on while the questions were open.
-    const e = newEntry(getState(), Object.assign({ sets: 3, repsMin: 8, repsMax: 8, rest: 90 }, x));
-    mut((dr) => { dr.exercises.push(e); });
+    return newEntry(getState(), Object.assign({ sets: 3, repsMin: 8, repsMax: 8, rest: 90 }, x));
+  };
+  const addExercise = async () => { const e = await pickExercise(); if (e) mut((dr) => { dr.exercises.push(e); }); };
+  // Swap puts the new exercise in the old one's place, for today only. Ticked
+  // sets of the old one would be lost, so that asks first.
+  const swapExercise = async (ei) => {
+    const old = d.exercises[ei];
+    const ticked = old.sets.filter((st) => st.done).length;
+    if (ticked && !(await confirmAction(`${old.name} has ${ticked} ticked set${ticked > 1 ? "s" : ""}`, "They won't be saved if you swap.", "Swap", "Keep"))) return;
+    const e = await pickExercise();
+    if (e) mut((dr) => { dr.exercises[ei] = e; });
+  };
+  // Rest is per exercise and can change mid-session; a countdown already
+  // running for this exercise moves with it.
+  const changeRest = (ei, delta) => {
+    const e = d.exercises[ei], cur = e.rest ?? 90, next = Math.max(0, cur + delta);
+    if (next === cur) return;
+    mut((dr) => { dr.exercises[ei].rest = next; });
+    setRest((r) => (r && r.name === e.name ? { ...r, total: Math.max(1, r.total + next - cur), endAt: r.endAt + (next - cur) * 1000 } : r));
   };
 
   const finish = async () => {
@@ -126,9 +152,30 @@ export default function Session({ onFinished, onExit }) {
         const k = valKey(e.mode);
         const hasW = !e.bodyweight;
         const targetText = px ? (px.target ? px.target + (px.rest ? ` · rest ${px.rest} s` : "") : fmtTarget(px, unit)) : "";
+        if (e.skipped) return (
+          <div className="card skipped" key={ei}>
+            <div className="hdr"><h3>{e.name}</h3><span className="pill">skipped</span></div>
+            <div className="row" style={{ marginTop: 6 }}><span className="muted small grow">Not saved today</span>
+              <button className="btn sm" onClick={() => mut((dr) => { delete dr.exercises[ei].skipped; })}>Undo</button></div>
+          </div>
+        );
         return (
           <div className={"card" + (allDone ? " done" : "")} key={ei}>
-            <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>{allDone && <span className="pill ok">✓ done</span>}</div>
+            <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>
+              <div className="row" style={{ gap: 8 }}>{allDone && <span className="pill ok">✓ done</span>}
+                <div className="menuwrap">
+                  <button className="dots" aria-label={`More for ${e.name}`} aria-expanded={menuFor === ei} onClick={() => setMenuFor(menuFor === ei ? null : ei)}>⋯</button>
+                  {menuFor === ei && <>
+                    <div className="menu-back" onClick={() => setMenuFor(null)} />
+                    <div className="menu" role="menu">
+                      <button role="menuitem" onClick={() => { setMenuFor(null); swapExercise(ei); }}><span className="ic">⇄</span><span>Swap<small>Do another exercise instead</small></span></button>
+                      <button role="menuitem" onClick={() => { setMenuFor(null); mut((dr) => { dr.exercises[ei].skipped = true; }); }}><span className="ic">⏭</span><span>Skip today<small>Grey it out, not saved</small></span></button>
+                      <button role="menuitem" className="red" onClick={async () => { setMenuFor(null); if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}><span className="ic">✕</span><span>Remove<small>Take it off today's list</small></span></button>
+                    </div>
+                  </>}
+                </div>
+              </div>
+            </div>
             {targetText && <div className="target">{targetText}</div>}
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
             {px && px.cue && <div className="cue">{px.cue}</div>}
@@ -158,8 +205,9 @@ export default function Session({ onFinished, onExit }) {
               <button className="btn sm" onClick={() => mut((dr) => { const ss = dr.exercises[ei].sets; const l = ss[ss.length - 1]; ss.push(l ? { ...l, done: false } : { done: false, w: e.bodyweight ? undefined : 0, [k]: 8 }); })}>+ set</button>
               {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}</>}
               {e.mode === "time" && <button className="btn sm" onClick={() => setTimerFor(ei)}>⏱ Timer</button>}
-              <button className="btn sm ghost danger" onClick={async () => { if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}>remove</button>
             </div>
+            <div className="restctl"><span className="muted small grow">{e.mode === "cardio" ? "Rest after" : "Rest between sets"}</span>
+              <button aria-label="Shorter rest" onClick={() => changeRest(ei, -15)}>−</button><b>{e.rest ?? 90} s</b><button aria-label="Longer rest" onClick={() => changeRest(ei, 15)}>+</button></div>
             <textarea rows={1} placeholder="Note (felt easy, bar height, knee…)" value={e.notes || ""} onChange={(ev) => mut((dr) => { dr.exercises[ei].notes = ev.target.value; })} />
           </div>
         );

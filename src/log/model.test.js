@@ -348,3 +348,17 @@ describe("cardio", () => {
     expect(out.sessions[0].exercises[0]).toMatchObject({ mode: "cardio", machine: "bike", sets: [{ s: 1200, m: 8000, lvl: 7 }] });
   });
 });
+
+describe("skip today", () => {
+  it("a skipped exercise is not saved and is not progress, even with ticked sets", () => {
+    const st = emptyState();
+    const x = { id: "squat", name: "Squat", mode: "reps", sets: 2, repsMin: 8, repsMax: 8, weight: 20 };
+    const d = { id: "x", date: "2026-10-11", workoutId: "free", name: "Free", exercises: [newEntry(st, x), newEntry(st, { ...x, id: "row", name: "Row" })] };
+    d.exercises[0].sets[0].done = true;
+    d.exercises[0].skipped = true;
+    expect(draftHasProgress(d)).toBe(false);
+    expect(finalizeDraft(d).exercises).toEqual([]);
+    d.exercises[1].sets[0].done = true;
+    expect(finalizeDraft(d).exercises.map((e) => e.exId)).toEqual(["row"]);
+  });
+});

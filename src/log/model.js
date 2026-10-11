@@ -204,7 +204,7 @@ export function newEntry(state, x) {
 export function draftHasProgress(d) {
   if (!d) return false;
   if ((d.notes || "").trim()) return true;
-  return (d.exercises || []).some((e) => (e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s)));
+  return (d.exercises || []).some((e) => !e.skipped && ((e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s))));
 }
 
 // A ticked set counts. So does a cardio block whose time or distance was typed
@@ -221,6 +221,8 @@ export function startDraft(state, workout) {
 export function finalizeDraft(d) {
   const out = { id: d.id, date: d.date, workoutId: d.workoutId, name: d.name, startedAt: d.startedAt, endedAt: new Date().toISOString(), notes: d.notes || "", exercises: [] };
   for (const e of d.exercises) {
+    // "Skip today" means not saved, even with sets already ticked.
+    if (e.skipped) continue;
     const keys = e.mode === "cardio" ? CARDIO_KEYS : [valKey(e.mode)];
     const sets = e.sets.filter((s) => setCounts(e, s)).map((s) => { const o = {}; if (s.w != null) o.w = s.w; for (const k of keys) if (s[k] != null) o[k] = s[k]; if (s.note) o.note = s.note; return o; });
     if (!sets.length && !e.notes) continue;
