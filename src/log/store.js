@@ -49,6 +49,13 @@ export function migrate(raw) {
   s.plan.stopRules = strList(s.plan.stopRules);
   s.plan.workouts = (s.plan.workouts || []).map(migrateWorkout);
   s.sessions = (s.sessions || []).map(normalizeSession);
+  // A workout already in progress from before plan exercises were marked:
+  // mark them now, so Finish still records the ones not done.
+  if (s.draft && s.draft.exercises && !s.draft.exercises.some((e) => "fromPlan" in e)) {
+    const w = s.plan.workouts.find((x) => x.id === s.draft.workoutId);
+    const ids = new Set(w ? w.exercises.map((x) => x.id) : []);
+    for (const e of s.draft.exercises) if (ids.has(e.exId)) e.fromPlan = true;
+  }
   return s;
 }
 

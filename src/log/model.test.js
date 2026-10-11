@@ -387,6 +387,22 @@ describe("skip, swap and not done are recorded", () => {
     expect(fmtEntry(out.exercises[0])).toBe("swapped for Leg Press · “Equipment busy”");
   });
 
+  it("a swapped-in card stands for its plan exercise: one entry, whatever happens to it", () => {
+    const swapped = () => { const d = plan(); d.exercises[0] = { ...newEntry(st, { ...x, id: "leg_press", name: "Leg Press" }), swappedFrom: { exId: "squat", name: "Squat", mode: "reps", reason: "Equipment busy" } }; return d; };
+    let d = swapped();
+    expect(finalizeDraft(d).exercises[0]).toMatchObject({ exId: "squat", status: "notdone", reason: "Equipment busy" });
+    expect(finalizeDraft(d).exercises.filter((e) => e.exId === "leg_press")).toEqual([]);
+    d = swapped(); Object.assign(d.exercises[0], { skipped: true, skipReason: "No time" });
+    const out = finalizeDraft(d).exercises;
+    expect(out.filter((e) => e.exId === "squat" || e.exId === "leg_press")).toEqual([expect.objectContaining({ exId: "squat", status: "skipped", reason: "No time" })]);
+  });
+
+  it("a draft from before plan marks gets them on load", () => {
+    const raw = { version: 3, plan: { workouts: [{ id: "a", name: "A", exercises: [x] }] }, draft: { workoutId: "a", exercises: [{ exId: "squat", name: "Squat", sets: [] }, { exId: "curl", name: "Curl", sets: [] }] } };
+    const m = migrate(raw);
+    expect(m.draft.exercises.map((e) => !!e.fromPlan)).toEqual([true, false]);
+  });
+
   it("status entries survive a backup, and never count as 'last time'", () => {
     const d = plan();
     Object.assign(d.exercises[0], { skipped: true, skipReason: "No time" });

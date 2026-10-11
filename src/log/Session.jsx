@@ -139,11 +139,16 @@ export default function Session({ onFinished, onExit }) {
   const swapExercise = async (ei) => {
     const old = d.exercises[ei];
     if (entryHasResults(old) && !(await confirmAction(`Swap ${old.name}?`, "Its ticked sets, typed results and note won't be saved.", "Swap", "Keep"))) return;
+    // Only leaving the plan exercise asks why; swapping its replacement again
+    // keeps that first reason.
     const planned = old.swappedFrom || (old.fromPlan && { exId: old.exId, name: old.name, mode: old.mode, perSide: old.perSide, bodyweight: old.bodyweight });
-    const why = planned ? await askReason(`Why swap ${planned.name}?`) : "";
+    const why = old.fromPlan ? await askReason(`Why swap ${old.name}?`) : "";
     if (why == null) return;
     const e = await pickExercise();
-    if (e) mut((dr) => { dr.exercises[ei] = planned ? { ...e, swappedFrom: { ...planned, reason: why || planned.reason || "" } } : e; });
+    if (!e) return;
+    // Picking the planned exercise again simply puts it back.
+    const next = !planned ? e : e.exId === planned.exId ? { ...e, fromPlan: true } : { ...e, swappedFrom: old.swappedFrom || { ...planned, reason: why } };
+    mut((dr) => { dr.exercises[ei] = next; });
   };
   // Rest is per exercise and can change mid-session; a countdown already
   // running for this exercise moves with it.

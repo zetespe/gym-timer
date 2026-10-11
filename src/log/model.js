@@ -69,7 +69,7 @@ function fmtStatus(e) {
   const why = e.reason ? ` · “${e.reason}”` : "";
   if (e.status === "skipped") return "skipped" + why;
   if (e.status === "swapped") return `swapped for ${e.swappedFor || "another exercise"}` + why;
-  return "not done";
+  return "not done" + why;
 }
 
 export function fmtEntry(e, unit = "kg") {
@@ -242,9 +242,16 @@ export function finalizeDraft(d) {
   const out = { id: d.id, date: d.date, workoutId: d.workoutId, name: d.name, startedAt: d.startedAt, endedAt: new Date().toISOString(), notes: d.notes || "", exercises: [] };
   const base = (e) => ({ exId: e.exId, name: e.name, mode: e.mode, sets: [], perSide: !!e.perSide, bodyweight: !!e.bodyweight, notes: "" });
   for (const e of d.exercises) {
-    // A plan exercise replaced by Swap is recorded as swapped, just before
-    // the exercise done instead.
-    if (e.swappedFrom) out.exercises.push({ ...base(e.swappedFrom), status: "swapped", swappedFor: e.name, reason: e.swappedFrom.reason || "" });
+    // A card swapped in for a plan exercise stands for that plan slot: done,
+    // it records the plan exercise as swapped (just before what was done
+    // instead); skipped or left untouched, the plan exercise itself is
+    // skipped or not done. One History entry per plan exercise either way.
+    if (e.swappedFrom) {
+      const plan = { ...base(e.swappedFrom), reason: e.swappedFrom.reason || "" };
+      if (e.skipped) { out.exercises.push({ ...plan, status: "skipped", reason: (e.skipReason || "").trim() || plan.reason, notes: e.notes || "" }); continue; }
+      if (!entryHasResults(e)) { out.exercises.push({ ...plan, status: "notdone" }); continue; }
+      out.exercises.push({ ...plan, status: "swapped", swappedFor: e.name });
+    }
     // "Skip today": recorded with its reason, but no sets, even ticked ones.
     if (e.skipped) { out.exercises.push({ ...base(e), status: "skipped", reason: (e.skipReason || "").trim(), notes: e.notes || "" }); continue; }
     const keys = e.mode === "cardio" ? CARDIO_KEYS : [valKey(e.mode)];
