@@ -63,7 +63,18 @@ export function fmtDate(iso) {
   return dt.toLocaleDateString(undefined, { day: "numeric", month: "short", year: y === new Date().getFullYear() ? undefined : "numeric" });
 }
 
+// A plan exercise that wasn't done says so in History, with the reason.
+export const SKIP_REASONS = ["Didn't feel like it", "Pain / injury", "No time", "Equipment busy"];
+function fmtStatus(e) {
+  const why = e.reason ? ` · “${e.reason}”` : "";
+  if (e.status === "swapped") return `swapped for ${e.swappedFor || "another exercise"}` + why;
+  // Skipped / not done after a swap name the swap too.
+  const via = e.swappedFor ? ` (swapped for ${e.swappedFor})` : "";
+  return (e.status === "skipped" ? "skipped" : "not done") + via + why;
+}
+
 export function fmtEntry(e, unit = "kg") {
+  if (e.status) return fmtStatus(e);
   if (e.mode === "cardio") return fmtCardio(e);
   const sets = (e.sets || []).filter((s) => setVal(s, e.mode) != null || s.w != null);
   if (!sets.length) return e.notes ? "(" + e.notes + ")" : "—";
@@ -101,8 +112,9 @@ export function historyFor(sessions, exId, opts = {}) {
   for (const s of sortedSessions(sessions)) {
     if (opts.excludeId && s.id === opts.excludeId) continue;
     // `mode` keeps an exercise switched to another type from reading the old
-    // type's numbers (25 minutes of cardio as a 1530 s hold).
-    for (const e of s.exercises) if (e.exId === exId && e.sets && e.sets.length && (!opts.mode || (e.mode || "reps") === opts.mode)) out.push({ date: s.date, session: s.name, entry: e });
+    // type's numbers (25 minutes of cardio as a 1530 s hold). Skipped / not
+    // done entries only show when asked for (History lists), never as "last time".
+    for (const e of s.exercises) if (e.exId === exId && (e.status ? opts.withStatus : e.sets && e.sets.length) && (!opts.mode || (e.mode || "reps") === opts.mode)) out.push({ date: s.date, session: s.name, entry: e });
   }
   return out;
 }
@@ -204,8 +216,18 @@ export function newEntry(state, x) {
 export function draftHasProgress(d) {
   if (!d) return false;
   if ((d.notes || "").trim()) return true;
-  return (d.exercises || []).some((e) => (e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s)));
+  // A skip, or a swap with a reason, is a decision worth keeping too (the
+  // same rule Finish uses through sessionHasContent).
+  return (d.exercises || []).some((e) => e.skipped || (e.swappedFrom && e.swappedFrom.reason) || entryHasResults(e));
 }
+
+// Finish keeps a session only if something happened: a result, a skip, a
+// swap, or a reason given. A session where every plan exercise is just
+// "not done" with no reason is empty.
+export const sessionHasContent = (out) => out.exercises.some((e) => e.status !== "notdone" || e.reason);
+
+// Anything in a session entry that Finish would save: a note or a counted set.
+export const entryHasResults = (e) => !!(e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s));
 
 // A ticked set counts. So does a cardio block whose time or distance was typed
 // in: those start empty (bar the goal), so a typed value is a real result even
@@ -213,17 +235,35 @@ export function draftHasProgress(d) {
 const setCounts = (e, s) => s.done || (e.mode === "cardio" && !!s.typed);
 
 export function startDraft(state, workout) {
-  const d = { id: today() + "-" + uid(), date: today(), workoutId: workout ? workout.id : "free", name: workout ? workout.name : "Free session", startedAt: new Date().toISOString(), notes: "", exercises: [] };
-  if (workout) for (const x of workout.exercises) d.exercises.push(newEntry(state, x));
+  const d = { id: today() + "-" + uid(), date: today(), workoutId: workout ? workout.id : "free", name: workout ? workout.name : "Free session", startedAt: new Date().toISOString(), notes: "", exercises: [], planMarked: true };
+  // fromPlan: the plan asked for it, so Finish records it even when not done.
+  if (workout) for (const x of workout.exercises) d.exercises.push({ ...newEntry(state, x), fromPlan: true });
   return d;
 }
 
 export function finalizeDraft(d) {
   const out = { id: d.id, date: d.date, workoutId: d.workoutId, name: d.name, startedAt: d.startedAt, endedAt: new Date().toISOString(), notes: d.notes || "", exercises: [] };
+  const base = (e) => ({ exId: e.exId, name: e.name, mode: e.mode, sets: [], perSide: !!e.perSide, bodyweight: !!e.bodyweight, notes: "" });
   for (const e of d.exercises) {
+    // A card swapped in for a plan exercise stands for that plan slot: done,
+    // it records the plan exercise as swapped (just before what was done
+    // instead); skipped or left untouched, the plan exercise itself is
+    // skipped or not done. One History entry per plan exercise either way.
+    if (e.swappedFrom) {
+      const plan = { ...base(e.swappedFrom), reason: e.swappedFrom.reason || "" };
+      if (e.skipped) { out.exercises.push({ ...plan, status: "skipped", swappedFor: e.name, reason: (e.skipReason || "").trim() || plan.reason, notes: e.notes || "" }); continue; }
+      if (!entryHasResults(e)) { out.exercises.push({ ...plan, status: "notdone", swappedFor: e.name }); continue; }
+      out.exercises.push({ ...plan, status: "swapped", swappedFor: e.name });
+    }
+    // "Skip today": recorded with its reason, but no sets, even ticked ones.
+    if (e.skipped) { out.exercises.push({ ...base(e), status: "skipped", reason: (e.skipReason || "").trim(), notes: e.notes || "" }); continue; }
     const keys = e.mode === "cardio" ? CARDIO_KEYS : [valKey(e.mode)];
     const sets = e.sets.filter((s) => setCounts(e, s)).map((s) => { const o = {}; if (s.w != null) o.w = s.w; for (const k of keys) if (s[k] != null) o[k] = s[k]; if (s.note) o.note = s.note; return o; });
-    if (!sets.length && !e.notes) continue;
+    if (!sets.length && !e.notes) {
+      // Untouched: a plan exercise is "not done"; one added today just goes.
+      if (e.fromPlan) out.exercises.push({ ...base(e), status: "notdone" });
+      continue;
+    }
     const entry = { exId: e.exId, name: e.name, mode: e.mode, sets, perSide: e.perSide, bodyweight: e.bodyweight, notes: e.notes || "" };
     if (e.mode === "cardio") { entry.machine = e.machine; entry.track = e.track; }
     out.exercises.push(entry);

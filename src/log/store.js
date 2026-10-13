@@ -49,6 +49,16 @@ export function migrate(raw) {
   s.plan.stopRules = strList(s.plan.stopRules);
   s.plan.workouts = (s.plan.workouts || []).map(migrateWorkout);
   s.sessions = (s.sessions || []).map(normalizeSession);
+  // A workout already in progress from before plan exercises were marked:
+  // mark them once, so Finish still records the ones not done. `planMarked`
+  // keeps this from ever re-running on a draft (it would mark cards added or
+  // swapped in during the session).
+  if (s.draft && s.draft.exercises && !s.draft.planMarked) {
+    const w = s.plan.workouts.find((x) => x.id === s.draft.workoutId);
+    const ids = new Set(w ? w.exercises.map((x) => x.id) : []);
+    for (const e of s.draft.exercises) if (ids.has(e.exId)) e.fromPlan = true;
+    s.draft.planMarked = true;
+  }
   return s;
 }
 
@@ -148,6 +158,7 @@ export function normalizeSession(s) {
       perSide: !!e.perSide,
       bodyweight: !!e.bodyweight,
       notes: e.notes || "",
+      ...(["skipped", "swapped", "notdone"].includes(e.status) ? { status: e.status, reason: e.reason || "", ...(e.swappedFor ? { swappedFor: e.swappedFor } : {}) } : {}),
       sets: (e.sets || []).map((st) => {
         const o = {};
         if (st.w != null) o.w = +st.w;

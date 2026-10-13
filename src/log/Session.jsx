@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLog, patch, setState, getState, slug, migrateExercise } from "./store";
-import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
+import { fmtDate, fmtEntry, fmtTarget, lastFor, valKey, valUnit, newEntry, finalizeDraft, entryHasResults, sessionHasContent, SKIP_REASONS, findExercise, parseQuickLog, suggest, allExercises, matchExercises, CARDIO_FIELDS, MACHINES, distUnit, toDisplayDist, fromDisplayDist } from "./model";
 import { Stepper, TimeField, toast, ask, confirmAction } from "./ui";
 import { beep, doubleBeep, speak } from "../audio";
 import { useWakeLock } from "../useWakeLock";
@@ -50,6 +50,14 @@ export default function Session({ onFinished, onExit }) {
     document.addEventListener("visibilitychange", sync);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", sync); };
   }, [rest]);
+  // Which card's "⋯" menu is open. Escape closes it, like tapping outside.
+  const [menuFor, setMenuFor] = useState(null);
+  useEffect(() => {
+    if (menuFor == null) return;
+    const onKey = (ev) => { if (ev.key === "Escape") setMenuFor(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuFor]);
 
   if (!d) return null;
   const unit = S.settings.unit;
@@ -57,31 +65,44 @@ export default function Session({ onFinished, onExit }) {
   const mins = Math.max(0, Math.round((now - new Date(d.startedAt)) / 60000));
 
   const mut = (fn) => patch((s) => { fn(s.draft); });
-  const startRest = (e) => { if (S.settings.restTimer && e.rest > 0) { restPrev.current = e.rest; setRest({ total: e.rest, endAt: Date.now() + e.rest * 1000, left: e.rest, name: e.name }); } };
+  // The countdown remembers its card (index and name), so changing rest on
+  // one card never shifts a countdown another card started.
+  const startRest = (ei) => { const e = d.exercises[ei]; if (S.settings.restTimer && e.rest > 0) { restPrev.current = e.rest; setRest({ total: e.rest, endAt: Date.now() + e.rest * 1000, left: e.rest, name: e.name, ei }); } };
   // Un-ticking also drops a cardio block's "typed" mark: an explicit untick means don't save it.
-  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { const st = dr.exercises[ei].sets[si]; st.done = !was; if (was) delete st.typed; }); if (!was) startRest(d.exercises[ei]); };
+  const toggleSet = (ei, si) => { const was = d.exercises[ei].sets[si].done; mut((dr) => { const st = dr.exercises[ei].sets[si]; st.done = !was; if (was) delete st.typed; }); if (!was) startRest(ei); };
 
   const onQuick = (text) => {
-    const r = parseQuickLog(text, d.exercises, unit);
-    if (r.error) { toast(r.error, 3500); return; }
+    const r = parseQuickLog(text, d.exercises.filter((x) => !x.skipped), unit);
+    if (r.error) {
+      // Name an exercise that is skipped or swapped out instead of "Which exercise?".
+      const hidden = !r.error.startsWith("Which exercise") ? null : findExercise(text, [...d.exercises.filter((x) => x.skipped).map((x) => ({ ...x, why: "is skipped today. Undo it first." })),
+        ...d.exercises.filter((x) => x.swappedFrom).map((x) => ({ name: x.swappedFrom.name, why: `was swapped for ${x.name}.` }))]);
+      toast(hidden ? `${hidden.name} ${hidden.why}` : r.error, 4000);
+      return false;
+    }
+    // Write into the card that was matched, not the first with that id: a
+    // skipped twin would swallow the sets.
+    const i = d.exercises.indexOf(r.ex);
     mut((dr) => {
-      const ex = dr.exercises.find((x) => x.exId === r.ex.exId);
+      const ex = dr.exercises[i];
       if (r.vals.length) ex.sets = r.vals.map((v) => { const o = { done: true }; if (!ex.bodyweight) o.w = r.weight != null ? r.weight : ex.sets[0] && ex.sets[0].w != null ? ex.sets[0].w : 0; o[r.k] = v; return o; });
       else if (r.weight != null) ex.sets.forEach((s) => { s.w = r.weight; s.done = true; });
       if (r.note) ex.notes = (ex.notes ? ex.notes + " " : "") + r.note;
     });
-    const ex = getState().draft.exercises.find((x) => x.exId === r.ex.exId);
+    const ex = getState().draft.exercises[i];
     toast("✓ " + ex.name + ": " + fmtEntry(ex, unit) + (r.note ? " · “" + r.note + "”" : ""), 3500);
+    return true;
   };
 
-  // One question at a time; Back returns to the previous question.
-  const addExercise = async () => {
+  // The add-exercise questions, one at a time (Back returns to the previous
+  // one). Resolves with a new session entry, or null when cancelled.
+  const pickExercise = async (title = "Exercise name") => {
     const pool = allExercises(S);
     let step = "name", name = "", matches = [], mode = "reps", x = null;
     while (!x) {
       if (step === "name") {
-        const v = await ask({ title: "Exercise name", input: { value: name, placeholder: "e.g. Goblet squat" }, buttons: [{ label: "Next", kind: "primary" }], back: "Cancel" });
-        if (v == null) return;
+        const v = await ask({ title, input: { value: name, placeholder: "e.g. Goblet squat" }, buttons: [{ label: "Next", kind: "primary" }], back: "Cancel" });
+        if (v == null) return null;
         name = v;
         x = pool.find((p) => p.name.toLowerCase() === name.toLowerCase());
         matches = x ? [] : matchExercises(name, pool);
@@ -101,34 +122,103 @@ export default function Session({ onFinished, onExit }) {
         else x = { id: slug(name), name, mode, bodyweight: v, perSide: false, sets: 3, repsMin: 8, repsMax: 8, weight: 0, rest: 90 };
       }
     }
+    // A known exercise brings its planned sets, weight and rest from any workout.
+    x = planExercise(x.id) || x;
     // State may have moved on while the questions were open.
-    const e = newEntry(getState(), Object.assign({ sets: 3, repsMin: 8, repsMax: 8, rest: 90 }, x));
-    mut((dr) => { dr.exercises.push(e); });
+    return newEntry(getState(), Object.assign({ sets: 3, repsMin: 8, repsMax: 8, rest: 90 }, x));
+  };
+  // "Why?" for not following the plan: a quick reason, your own words, or
+  // none. Resolves with the reason ("" for none), or null when cancelled.
+  const askReason = async (title) => {
+    for (;;) {
+      const v = await ask({ title, text: "Saved in History.", buttons: [...SKIP_REASONS.map((r) => ({ label: r, value: r })), { label: "Other reason…", value: "other" }, { label: "No reason", value: "" }], back: "Cancel", stack: true });
+      if (v !== "other") return v;
+      const own = await ask({ title: "Your reason", input: { placeholder: "e.g. shoulder felt tight" }, buttons: [{ label: "Save", kind: "primary" }], back: "Back" });
+      if (own != null) return own;
+    }
+  };
+  const skipExercise = async (ei) => {
+    const why = await askReason(`Skip ${d.exercises[ei].name}?`);
+    if (why != null) mut((dr) => { Object.assign(dr.exercises[ei], { skipped: true, skipReason: why }); });
+  };
+  // This workout's version first: the same exercise can differ between workouts.
+  const planExercise = (id) => (workout && workout.exercises.find((p) => p.id === id)) || S.plan.workouts.flatMap((w) => w.exercises).find((p) => p.id === id);
+  const addExercise = async () => { const e = await pickExercise(); if (e) mut((dr) => { dr.exercises.push(e); }); };
+  // Swap puts the new exercise in the old one's place, for today only. Results
+  // on the old card would be lost, so that asks first. Replacing a plan
+  // exercise asks why, and History records it as swapped.
+  const swapExercise = async (ei) => {
+    const old = d.exercises[ei];
+    if (entryHasResults(old) && !(await confirmAction(`Swap ${old.name}?`, "Its ticked sets, typed results and note won't be saved.", "Swap", "Keep"))) return;
+    // Only leaving the plan exercise asks why; swapping its replacement again
+    // keeps that first reason.
+    const planned = old.swappedFrom || (old.fromPlan && { exId: old.exId, name: old.name, mode: old.mode, perSide: old.perSide, bodyweight: old.bodyweight });
+    const why = old.fromPlan ? await askReason(`Why swap ${old.name}?`) : "";
+    if (why == null) return;
+    const e = await pickExercise(`Swap ${old.name} for…`);
+    if (!e) return;
+    setRest((r) => (r && r.ei === ei ? null : r));
+    // Picking the planned exercise again simply puts it back.
+    const next = !planned ? e : e.exId === planned.exId ? { ...e, fromPlan: true } : { ...e, swappedFrom: old.swappedFrom || { ...planned, reason: why } };
+    mut((dr) => { dr.exercises[ei] = next; });
+  };
+  // Rest is per exercise and can change mid-session; a countdown already
+  // running for this exercise moves with it.
+  const changeRest = (ei, delta) => {
+    const e = d.exercises[ei], cur = e.rest ?? 90, next = Math.max(0, cur + delta);
+    if (next === cur) return;
+    mut((dr) => { dr.exercises[ei].rest = next; });
+    setRest((r) => (r && r.ei === ei && r.name === e.name ? { ...r, total: Math.max(1, r.total + next - cur), endAt: r.endAt + (next - cur) * 1000 } : r));
   };
 
   const finish = async () => {
     const out = finalizeDraft(d);
-    if (!out.exercises.length) { if (await confirmAction("Nothing ticked yet", "Discard this session?", "Discard", "Keep going")) { setState((s) => ({ ...s, draft: null })); onExit(); } return; }
+    if (!sessionHasContent(out)) { if (await confirmAction("Nothing ticked yet", "Discard this session?", "Discard", "Keep going")) { setState((s) => ({ ...s, draft: null })); onExit(); } return; }
     setState((s) => ({ ...s, sessions: [...s.sessions, out], draft: null, settings: { ...s.settings, sessionsSinceBackup: (s.settings.sessionsSinceBackup || 0) + 1 } }));
     onFinished(out.id);
   };
 
   return (
-    <div className="page">
+    <div className={"page" + (rest ? " resting" : "")}>
       <div className="hdr"><h1>{d.name}</h1><span className="muted small">{fmtDate(d.date)} · {mins} min</span></div>
       {workout && workout.intent && <p className="muted small">{workout.intent}</p>}
       {S.plan.loadNote && <div className="banner">{S.plan.loadNote}</div>}
       {d.exercises.map((e, ei) => {
-        const px = workout ? workout.exercises.find((x) => x.id === e.exId) : null;
+        const px = planExercise(e.exId) || null;
         const last = lastFor(S.sessions, e.exId, { excludeId: d.id, mode: e.mode });
         const sug = px ? suggest(S, px) : { kind: "none", text: "" };
         const allDone = e.sets.length > 0 && e.sets.every((s) => s.done);
         const k = valKey(e.mode);
         const hasW = !e.bodyweight;
-        const targetText = px ? (px.target ? px.target + (px.rest ? ` · rest ${px.rest} s` : "") : fmtTarget(px, unit)) : "";
+        // Rest has its own control on the card, so the target line leaves it out.
+        const targetText = px ? px.target || fmtTarget({ ...px, rest: 0 }, unit) : "";
+        if (e.skipped) return (
+          <div className="card skipped" key={ei}>
+            <div className="hdr"><h3>{e.name}</h3><span className="pill">skipped</span></div>
+            <div className="row" style={{ marginTop: 6 }}><span className="muted small grow">Saved as skipped, no sets</span>
+              <button className="btn sm" onClick={() => mut((dr) => { delete dr.exercises[ei].skipped; delete dr.exercises[ei].skipReason; })}>Undo</button></div>
+            <textarea rows={2} placeholder="Why? (optional, saved in History)" value={e.skipReason || ""} onChange={(ev) => mut((dr) => { dr.exercises[ei].skipReason = ev.target.value; })} />
+          </div>
+        );
         return (
           <div className={"card" + (allDone ? " done" : "")} key={ei}>
-            <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>{allDone && <span className="pill ok">✓ done</span>}</div>
+            <div className="hdr"><h3>{e.name}{e.perSide && <> <span className="pill">per side</span></>}</h3>
+              <div className="row" style={{ gap: 8 }}>{allDone && <span className="pill ok">✓ done</span>}
+                <div className="menuwrap">
+                  <button className="dots" aria-label={`More for ${e.name}`} aria-expanded={menuFor === ei} onClick={() => setMenuFor(menuFor === ei ? null : ei)}>⋯</button>
+                  {menuFor === ei && <>
+                    <div className="menu-back" onClick={() => setMenuFor(null)} />
+                    <div className="menu" role="menu">
+                      <button role="menuitem" onClick={() => { setMenuFor(null); swapExercise(ei); }}><span className="ic">⇄</span><span>Swap<small>Do another exercise instead</small></span></button>
+                      <button role="menuitem" onClick={() => { setMenuFor(null); skipExercise(ei); }}><span className="ic">⏭</span><span>Skip today<small>Not doing it today; History notes why</small></span></button>
+                      {/* Plan exercises can't vanish from the record: Swap or Skip them. */}
+                      {!e.fromPlan && !e.swappedFrom && <button role="menuitem" className="red" onClick={async () => { setMenuFor(null); if (await confirmAction(`Remove ${e.name} from this session?`, entryHasResults(e) ? "Its ticked sets and note won't be saved." : "", "Remove")) { mut((dr) => { dr.exercises.splice(ei, 1); }); setRest((r) => (!r ? r : r.ei === ei ? null : r.ei > ei ? { ...r, ei: r.ei - 1 } : r)); } }}><span className="ic">✕</span><span>Remove<small>Added by mistake? Take it off</small></span></button>}
+                    </div>
+                  </>}
+                </div>
+              </div>
+            </div>
+            {e.swappedFrom && <div className="target">instead of {e.swappedFrom.name}{e.swappedFrom.reason ? ` · “${e.swappedFrom.reason}”` : ""}</div>}
             {targetText && <div className="target">{targetText}</div>}
             <div className="last">{last ? <>Last ({fmtDate(last.date)}): <b>{fmtEntry(last.entry, unit)}</b>{last.entry.notes ? " — " + last.entry.notes : ""}</> : "No previous record"}</div>
             {px && px.cue && <div className="cue">{px.cue}</div>}
@@ -154,12 +244,13 @@ export default function Session({ onFinished, onExit }) {
             </div>}
             <div className="ex-actions">
               {/* Cardio is one block for now; interval blocks come later. */}
-              {e.mode !== "cardio" && <><button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(e); }}>✓ All as shown</button>
+              {e.mode !== "cardio" && <><button className="btn sm" onClick={() => { const all = e.sets.every((s) => s.done); mut((dr) => { dr.exercises[ei].sets.forEach((s) => (s.done = !all)); }); if (!all) startRest(ei); }}>✓ All as shown</button>
               <button className="btn sm" onClick={() => mut((dr) => { const ss = dr.exercises[ei].sets; const l = ss[ss.length - 1]; ss.push(l ? { ...l, done: false } : { done: false, w: e.bodyweight ? undefined : 0, [k]: 8 }); })}>+ set</button>
               {e.sets.length > 0 && <button className="btn sm ghost" onClick={() => mut((dr) => { dr.exercises[ei].sets.pop(); })}>− set</button>}</>}
               {e.mode === "time" && <button className="btn sm" onClick={() => setTimerFor(ei)}>⏱ Timer</button>}
-              <button className="btn sm ghost danger" onClick={async () => { if (await confirmAction(`Remove ${e.name} from this session?`, "", "Remove")) mut((dr) => { dr.exercises.splice(ei, 1); }); }}>remove</button>
             </div>
+            <div className="restctl"><span className="muted small grow">{e.mode === "cardio" ? "Rest after" : "Rest between sets"}</span>
+              <button aria-label="Shorter rest" onClick={() => changeRest(ei, -15)}>−</button><b>{e.rest ?? 90} s</b><button aria-label="Longer rest" onClick={() => changeRest(ei, 15)}>+</button></div>
             <textarea rows={1} placeholder="Note (felt easy, bar height, knee…)" value={e.notes || ""} onChange={(ev) => mut((dr) => { dr.exercises[ei].notes = ev.target.value; })} />
           </div>
         );
@@ -174,7 +265,7 @@ export default function Session({ onFinished, onExit }) {
       <h2>Session notes</h2>
       <textarea rows={2} placeholder="Anything about the whole session" value={d.notes || ""} onChange={(ev) => mut((dr) => { dr.notes = ev.target.value; })} />
       <div className="quick">
-        <form onSubmit={(ev) => { ev.preventDefault(); const i = ev.target.elements.q; if (i.value.trim()) onQuick(i.value.trim()); i.value = ""; }}>
+        <form onSubmit={(ev) => { ev.preventDefault(); const i = ev.target.elements.q; if (i.value.trim() && onQuick(i.value.trim())) i.value = ""; }}>
           <input className="text" name="q" enterKeyHint="done" placeholder="Quick log: “goblet 16 8 8 7 felt easy”" autoComplete="off" />
           <button className="btn primary" type="submit">Log</button>
         </form>
@@ -219,7 +310,7 @@ export default function Session({ onFinished, onExit }) {
               setTimerFor(null);
               // The timer runs no rest after the last set, so the rest before
               // the next exercise starts here, as it does for a manual tick.
-              if (secs.length) startRest(d.exercises[timerFor]);
+              if (secs.length) startRest(timerFor);
               if (secs.length) toast(`${secs.join(", ")} s recorded for ${d.exercises[timerFor].name}`);
             }}
           />

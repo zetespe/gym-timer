@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, lastFor, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
+import { extractJSON, parseQuickLog, parsePlanText, applyImport, suggest, newEntry, draftHasProgress, entryHasResults, sessionHasContent, startDraft, lastFor, matchExercises, findExercise, fmtTime, fmtEntry, fmtTarget, finalizeDraft } from "./model";
 import { emptyState, migrate, strList, migrateExercise, normalizeSession } from "./store";
 
 describe("technique fields and training rules", () => {
@@ -346,5 +346,97 @@ describe("cardio", () => {
       sessions: [{ id: "a", date: "2026-10-01", exercises: [{ exId: "bike", name: "Bike", mode: "cardio", machine: "bike", track: ["m", "lvl"], sets: [{ s: 1200, m: 8000, lvl: 7 }] }] }] })));
     expect(out.plan.workouts[0].exercises[0]).toMatchObject({ mode: "cardio", machine: "treadmill", track: ["m", "inc", "spd"] });
     expect(out.sessions[0].exercises[0]).toMatchObject({ mode: "cardio", machine: "bike", sets: [{ s: 1200, m: 8000, lvl: 7 }] });
+  });
+});
+
+describe("skip, swap and not done are recorded", () => {
+  const st = emptyState();
+  const x = { id: "squat", name: "Squat", mode: "reps", sets: 2, repsMin: 8, repsMax: 8, weight: 20 };
+  const plan = () => startDraft(st, { id: "a", name: "A", exercises: [x, { ...x, id: "row", name: "Row" }] });
+
+  it("a skip is saved with its reason and no sets, even ticked ones", () => {
+    const d = plan();
+    d.exercises[0].sets[0].done = true;
+    Object.assign(d.exercises[0], { skipped: true, skipReason: "Pain / injury" });
+    expect(draftHasProgress(d)).toBe(true);
+    const out = finalizeDraft(d);
+    expect(out.exercises[0]).toMatchObject({ exId: "squat", status: "skipped", reason: "Pain / injury", sets: [] });
+    expect(fmtEntry(out.exercises[0])).toBe("skipped · “Pain / injury”");
+    expect(sessionHasContent(out)).toBe(true);
+  });
+
+  it("an untouched plan exercise is 'not done'; one added today just goes", () => {
+    const d = plan();
+    d.exercises.push(newEntry(st, { ...x, id: "curl", name: "Curl" }));
+    d.exercises[1].sets[0].done = true;
+    const out = finalizeDraft(d);
+    expect(out.exercises.map((e) => [e.exId, e.status || "done"])).toEqual([["squat", "notdone"], ["row", "done"]]);
+    expect(fmtEntry(out.exercises[0])).toBe("not done");
+  });
+
+  it("a session where nothing happened is still empty", () => {
+    expect(sessionHasContent(finalizeDraft(plan()))).toBe(false);
+  });
+
+  it("a swap records the plan exercise as swapped, before the one done instead", () => {
+    const d = plan();
+    d.exercises[0] = { ...newEntry(st, { ...x, id: "leg_press", name: "Leg Press" }), swappedFrom: { exId: "squat", name: "Squat", mode: "reps", reason: "Equipment busy" } };
+    d.exercises[0].sets[0].done = true;
+    const out = finalizeDraft(d);
+    expect(out.exercises.slice(0, 2).map((e) => [e.exId, e.status || "done"])).toEqual([["squat", "swapped"], ["leg_press", "done"]]);
+    expect(fmtEntry(out.exercises[0])).toBe("swapped for Leg Press · “Equipment busy”");
+  });
+
+  it("a swapped-in card stands for its plan exercise: one entry, whatever happens to it", () => {
+    const swapped = () => { const d = plan(); d.exercises[0] = { ...newEntry(st, { ...x, id: "leg_press", name: "Leg Press" }), swappedFrom: { exId: "squat", name: "Squat", mode: "reps", reason: "Equipment busy" } }; return d; };
+    let d = swapped();
+    expect(finalizeDraft(d).exercises[0]).toMatchObject({ exId: "squat", status: "notdone", reason: "Equipment busy" });
+    expect(finalizeDraft(d).exercises.filter((e) => e.exId === "leg_press")).toEqual([]);
+    d = swapped(); Object.assign(d.exercises[0], { skipped: true, skipReason: "No time" });
+    const out = finalizeDraft(d).exercises;
+    expect(out.filter((e) => e.exId === "squat" || e.exId === "leg_press")).toEqual([expect.objectContaining({ exId: "squat", status: "skipped", reason: "No time" })]);
+    expect(fmtEntry(out.find((e) => e.exId === "squat"))).toBe("skipped (swapped for Leg Press) · “No time”");
+  });
+
+  it("a draft from before plan marks gets them on load, once", () => {
+    const raw = { version: 3, plan: { workouts: [{ id: "a", name: "A", exercises: [x] }] }, draft: { workoutId: "a", exercises: [{ exId: "squat", name: "Squat", sets: [] }, { exId: "curl", name: "Curl", sets: [] }] } };
+    const m = migrate(raw);
+    expect(m.draft.exercises.map((e) => !!e.fromPlan)).toEqual([true, false]);
+    // Later: Squat swapped away, Squat added again by hand. Reloading must not mark the added one.
+    m.draft.exercises = [{ exId: "leg_press", name: "Leg Press", sets: [], swappedFrom: { exId: "squat", name: "Squat" } }, { exId: "squat", name: "Squat", sets: [] }];
+    expect(migrate(JSON.parse(JSON.stringify(m))).draft.exercises.map((e) => !!e.fromPlan)).toEqual([false, false]);
+    expect(startDraft(st, { id: "a", name: "A", exercises: [x] }).planMarked).toBe(true);
+  });
+
+  it("a swap with no reason and nothing done is not progress, mid-session or at Finish", () => {
+    const d = plan();
+    d.exercises[0] = { ...newEntry(st, { ...x, id: "leg_press", name: "Leg Press" }), swappedFrom: { exId: "squat", name: "Squat", reason: "" } };
+    expect(draftHasProgress(d)).toBe(false);
+    expect(sessionHasContent(finalizeDraft(d))).toBe(false);
+  });
+
+  it("swap reasons alone are worth saving", () => {
+    const d = plan();
+    d.exercises = d.exercises.map((e) => ({ ...newEntry(st, { ...x, id: e.exId + "_alt", name: e.name + " alt" }), swappedFrom: { exId: e.exId, name: e.name, reason: "Equipment busy" } }));
+    expect(sessionHasContent(finalizeDraft(d))).toBe(true);
+  });
+
+  it("status entries survive a backup, and never count as 'last time'", () => {
+    const d = plan();
+    Object.assign(d.exercises[0], { skipped: true, skipReason: "No time" });
+    st.sessions = [normalizeSession(JSON.parse(JSON.stringify(finalizeDraft(d))))];
+    expect(st.sessions[0].exercises[0]).toMatchObject({ status: "skipped", reason: "No time" });
+    expect(lastFor(st.sessions, "squat")).toBe(null);
+    expect(lastFor(st.sessions, "squat", { withStatus: true }).entry.status).toBe("skipped");
+    st.sessions = [];
+  });
+});
+
+describe("entryHasResults (what Swap must not drop silently)", () => {
+  it("counts ticked sets, typed cardio results and notes; not prefilled numbers", () => {
+    expect(entryHasResults({ mode: "reps", sets: [{ done: false, r: 8 }] })).toBe(false);
+    expect(entryHasResults({ mode: "reps", sets: [{ done: true, r: 8 }] })).toBe(true);
+    expect(entryHasResults({ mode: "cardio", sets: [{ done: false, s: 1200, typed: true }] })).toBe(true);
+    expect(entryHasResults({ mode: "reps", notes: "knee hurt", sets: [] })).toBe(true);
   });
 });

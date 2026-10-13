@@ -12,7 +12,7 @@ export default function History() {
 
   if (exId) {
     const x = exs.find((e) => e.id === exId);
-    const rows = historyFor(S.sessions, exId);
+    const rows = historyFor(S.sessions, exId, { withStatus: true });
     return (
       <div className="page">
         <p><button className="link" onClick={() => setExId(null)}>‹ History</button></p>
