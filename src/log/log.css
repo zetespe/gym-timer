@@ -9,6 +9,7 @@
 .log button, .log input, .log textarea, .log select { font: inherit; color: inherit; }
 .log button { cursor: pointer; border: 0; background: none; }
 .page { max-width: 620px; margin: 0 auto; padding: calc(12px + var(--sat)) 14px calc(96px + var(--sab)); }
+.page.resting { padding-bottom: calc(170px + var(--sab)); } /* room for the rest bar above the tabs */
 .page h1 { font-size: 26px; margin: 8px 0 2px; letter-spacing: -0.01em; }
 .page h2 { font-size: 19px; margin: 22px 0 8px; }
 .page h3 { font-size: 17px; margin: 0; }

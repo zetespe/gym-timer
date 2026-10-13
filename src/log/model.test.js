@@ -395,6 +395,7 @@ describe("skip, swap and not done are recorded", () => {
     d = swapped(); Object.assign(d.exercises[0], { skipped: true, skipReason: "No time" });
     const out = finalizeDraft(d).exercises;
     expect(out.filter((e) => e.exId === "squat" || e.exId === "leg_press")).toEqual([expect.objectContaining({ exId: "squat", status: "skipped", reason: "No time" })]);
+    expect(fmtEntry(out.find((e) => e.exId === "squat"))).toBe("skipped (swapped for Leg Press) · “No time”");
   });
 
   it("a draft from before plan marks gets them on load, once", () => {

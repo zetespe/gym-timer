@@ -67,9 +67,10 @@ export function fmtDate(iso) {
 export const SKIP_REASONS = ["Didn't feel like it", "Pain / injury", "No time", "Equipment busy"];
 function fmtStatus(e) {
   const why = e.reason ? ` · “${e.reason}”` : "";
-  if (e.status === "skipped") return "skipped" + why;
   if (e.status === "swapped") return `swapped for ${e.swappedFor || "another exercise"}` + why;
-  return "not done" + why;
+  // Skipped / not done after a swap name the swap too.
+  const via = e.swappedFor ? ` (swapped for ${e.swappedFor})` : "";
+  return (e.status === "skipped" ? "skipped" : "not done") + via + why;
 }
 
 export function fmtEntry(e, unit = "kg") {
@@ -249,8 +250,8 @@ export function finalizeDraft(d) {
     // skipped or not done. One History entry per plan exercise either way.
     if (e.swappedFrom) {
       const plan = { ...base(e.swappedFrom), reason: e.swappedFrom.reason || "" };
-      if (e.skipped) { out.exercises.push({ ...plan, status: "skipped", reason: (e.skipReason || "").trim() || plan.reason, notes: e.notes || "" }); continue; }
-      if (!entryHasResults(e)) { out.exercises.push({ ...plan, status: "notdone" }); continue; }
+      if (e.skipped) { out.exercises.push({ ...plan, status: "skipped", swappedFor: e.name, reason: (e.skipReason || "").trim() || plan.reason, notes: e.notes || "" }); continue; }
+      if (!entryHasResults(e)) { out.exercises.push({ ...plan, status: "notdone", swappedFor: e.name }); continue; }
       out.exercises.push({ ...plan, status: "swapped", swappedFor: e.name });
     }
     // "Skip today": recorded with its reason, but no sets, even ticked ones.
