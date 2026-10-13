@@ -408,6 +408,13 @@ describe("skip, swap and not done are recorded", () => {
     expect(startDraft(st, { id: "a", name: "A", exercises: [x] }).planMarked).toBe(true);
   });
 
+  it("a swap with no reason and nothing done is not progress, mid-session or at Finish", () => {
+    const d = plan();
+    d.exercises[0] = { ...newEntry(st, { ...x, id: "leg_press", name: "Leg Press" }), swappedFrom: { exId: "squat", name: "Squat", reason: "" } };
+    expect(draftHasProgress(d)).toBe(false);
+    expect(sessionHasContent(finalizeDraft(d))).toBe(false);
+  });
+
   it("swap reasons alone are worth saving", () => {
     const d = plan();
     d.exercises = d.exercises.map((e) => ({ ...newEntry(st, { ...x, id: e.exId + "_alt", name: e.name + " alt" }), swappedFrom: { exId: e.exId, name: e.name, reason: "Equipment busy" } }));

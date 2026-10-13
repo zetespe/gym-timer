@@ -216,8 +216,9 @@ export function newEntry(state, x) {
 export function draftHasProgress(d) {
   if (!d) return false;
   if ((d.notes || "").trim()) return true;
-  // A skip or swap is a decision worth keeping too.
-  return (d.exercises || []).some((e) => e.skipped || e.swappedFrom || entryHasResults(e));
+  // A skip, or a swap with a reason, is a decision worth keeping too (the
+  // same rule Finish uses through sessionHasContent).
+  return (d.exercises || []).some((e) => e.skipped || (e.swappedFrom && e.swappedFrom.reason) || entryHasResults(e));
 }
 
 // Finish keeps a session only if something happened: a result, a skip, a

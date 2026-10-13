@@ -75,7 +75,7 @@ export default function Session({ onFinished, onExit }) {
     const r = parseQuickLog(text, d.exercises.filter((x) => !x.skipped), unit);
     if (r.error) {
       // Name an exercise that is skipped or swapped out instead of "Which exercise?".
-      const hidden = r.ex ? null : findExercise(text, [...d.exercises.filter((x) => x.skipped).map((x) => ({ ...x, why: "is skipped today. Undo it first." })),
+      const hidden = !r.error.startsWith("Which exercise") ? null : findExercise(text, [...d.exercises.filter((x) => x.skipped).map((x) => ({ ...x, why: "is skipped today. Undo it first." })),
         ...d.exercises.filter((x) => x.swappedFrom).map((x) => ({ name: x.swappedFrom.name, why: `was swapped for ${x.name}.` }))]);
       toast(hidden ? `${hidden.name} ${hidden.why}` : r.error, 4000);
       return false;
@@ -141,7 +141,8 @@ export default function Session({ onFinished, onExit }) {
     const why = await askReason(`Skip ${d.exercises[ei].name}?`);
     if (why != null) mut((dr) => { Object.assign(dr.exercises[ei], { skipped: true, skipReason: why }); });
   };
-  const planExercise = (id) => S.plan.workouts.flatMap((w) => w.exercises).find((p) => p.id === id);
+  // This workout's version first: the same exercise can differ between workouts.
+  const planExercise = (id) => (workout && workout.exercises.find((p) => p.id === id)) || S.plan.workouts.flatMap((w) => w.exercises).find((p) => p.id === id);
   const addExercise = async () => { const e = await pickExercise(); if (e) mut((dr) => { dr.exercises.push(e); }); };
   // Swap puts the new exercise in the old one's place, for today only. Results
   // on the old card would be lost, so that asks first. Replacing a plan
@@ -183,7 +184,7 @@ export default function Session({ onFinished, onExit }) {
       {workout && workout.intent && <p className="muted small">{workout.intent}</p>}
       {S.plan.loadNote && <div className="banner">{S.plan.loadNote}</div>}
       {d.exercises.map((e, ei) => {
-        const px = (workout && workout.exercises.find((x) => x.id === e.exId)) || planExercise(e.exId) || null;
+        const px = planExercise(e.exId) || null;
         const last = lastFor(S.sessions, e.exId, { excludeId: d.id, mode: e.mode });
         const sug = px ? suggest(S, px) : { kind: "none", text: "" };
         const allDone = e.sets.length > 0 && e.sets.every((s) => s.done);
