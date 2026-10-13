@@ -146,3 +146,90 @@ PNG sizes, and replace the files in `public/`.
 
 **Expected user experience:** a distinctive Gymmy icon on the phone's home
 screen instead of the generic stopwatch.
+
+## 8. Cardio part 2: hard / easy intervals (designed 2026-10-06)
+
+**What she wants (plain English):** some cardio is intervals, e.g. 5 × (2 min
+hard + 1 min easy) on the treadmill. She wants to record them in bulk, and
+still be able to change a single block when one was different.
+
+**Agreed design:** the plan says "N × hard / easy" with times. In the session
+the blocks are grouped, not 10 rows: a **Hard ×5** line and an **Easy ×5**
+line, each with its settings (incline, speed, level). Changing a value on the
+group line changes every block in it; **edit each ›** opens the blocks so one
+can differ (the group line then says e.g. "incline 8% (one at 6%)"); **✓ all**
+ticks a group. Distance is recorded once as a total for the whole session (the
+machine shows a running total; nobody notes 2-minute splits). No warm-up /
+cool-down blocks. Steady cardio stays one block as today.
+
+**What needs to be done (tech notes):** cardio entries already store blocks
+as `sets`; add a `kind` (`hard` / `easy`) per block and a plan field for the
+pattern. Totals (`cardioTotals`) already add time and average settings across
+blocks. Teach the AI prompt and `docs/AI-PROTOCOL.md` the interval form, with
+a test that imports the documented example (as for steady cardio).
+
+**Expected user experience:** an interval session is two lines to fill in,
+not ten; History shows e.g. "15:00 · 2.40 km · 5 × hard/easy".
+
+**Deferred within it:** an interval timer that beeps hard → easy → hard. Most
+machines have their own interval programmes; add only if missed.
+
+## 9. Cardio in quick log and in pasted plans
+
+**What we found:** quick log refuses cardio ("fill in X on its card"), and in
+Plan → Paste a plan a line like "Treadmill 30 min" has no set scheme, so it
+becomes the workout's description text instead of an exercise.
+
+**What needs to be done:** parse cardio lines in `parseQuickLog`
+("treadmill 25 min 2.1 km incline 8", "bike 20:00 8 km level 7") and in
+`parsePlanText` (a known machine word plus a time or distance → a cardio
+exercise with that goal). Both need tests with real phrasings.
+
+**Expected user experience:** dictate "treadmill 25 minutes 2.1 km incline 8"
+into quick log and the card fills in; paste "Rower 2000 m" in a plan and it
+becomes a rower exercise with a distance goal.
+
+## 10. Move exercises up or down during a session
+
+**What we found:** in a session, exercises keep the plan's order and an added
+one always goes to the bottom. Swap (⋯ menu) covers "do this instead, here",
+but not "do the same exercises in a different order" (e.g. a machine is busy,
+so do the next one first).
+
+**What needs to be done:** a **Move up / Move down** item in the card's ⋯
+menu (today only; the plan's order is unchanged). The rest countdown stores a
+card index (`rest.ei`), so moving must update it like Remove does.
+
+**Expected user experience:** two taps to reorder today's workout; History
+lists exercises in the order they were done.
+
+## 11. Today screen wording (found in QA, 2026-10-13)
+
+**What we found:**
+- A workout button with no subtitle and no history says "**1 exercises**"
+  (no singular).
+- The "Continue Workout A" button says "**1/4 exercises ticked**" after
+  ticking a single set; it counts exercises with *any* ticked set, which reads
+  as if a whole exercise were done.
+
+**What needs to be done:** singular/plural for the count; reword the
+progress, e.g. "1 of 4 exercises started" or count completed exercises
+(all sets ticked) separately.
+
+**Expected user experience:** the Continue button tells you honestly how far
+the workout is.
+
+## 12. A running rest countdown is lost when the app reloads
+
+**What we found:** the rest countdown lives only in the session screen's
+memory (`rest` state in `Session.jsx`). Ticks, skips, swaps and each card's
+rest value are saved, but if the phone reloads the app mid-rest (iOS does
+this to web apps after a while in the background), the countdown is gone.
+
+**What needs to be done:** save the running rest (`endAt`, total, card) in
+the draft and restore it on load; it is already computed from the wall clock,
+so a restored countdown shows the right remaining time (or "Rest ended N
+seconds ago").
+
+**Expected user experience:** come back to the app after it was reloaded and
+the rest bar is still there, with the correct time left.
