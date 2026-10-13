@@ -219,9 +219,10 @@ export function draftHasProgress(d) {
   return (d.exercises || []).some((e) => e.skipped || e.swappedFrom || entryHasResults(e));
 }
 
-// Finish keeps a session only if something happened: a result, a skip or a
-// swap. A session where every plan exercise is just "not done" is empty.
-export const sessionHasContent = (out) => out.exercises.some((e) => e.status !== "notdone");
+// Finish keeps a session only if something happened: a result, a skip, a
+// swap, or a reason given. A session where every plan exercise is just
+// "not done" with no reason is empty.
+export const sessionHasContent = (out) => out.exercises.some((e) => e.status !== "notdone" || e.reason);
 
 // Anything in a session entry that Finish would save: a note or a counted set.
 export const entryHasResults = (e) => !!(e.notes || "").trim() || (e.sets || []).some((s) => setCounts(e, s));
@@ -232,7 +233,7 @@ export const entryHasResults = (e) => !!(e.notes || "").trim() || (e.sets || [])
 const setCounts = (e, s) => s.done || (e.mode === "cardio" && !!s.typed);
 
 export function startDraft(state, workout) {
-  const d = { id: today() + "-" + uid(), date: today(), workoutId: workout ? workout.id : "free", name: workout ? workout.name : "Free session", startedAt: new Date().toISOString(), notes: "", exercises: [] };
+  const d = { id: today() + "-" + uid(), date: today(), workoutId: workout ? workout.id : "free", name: workout ? workout.name : "Free session", startedAt: new Date().toISOString(), notes: "", exercises: [], planMarked: true };
   // fromPlan: the plan asked for it, so Finish records it even when not done.
   if (workout) for (const x of workout.exercises) d.exercises.push({ ...newEntry(state, x), fromPlan: true });
   return d;

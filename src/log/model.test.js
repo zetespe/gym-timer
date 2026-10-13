@@ -397,10 +397,20 @@ describe("skip, swap and not done are recorded", () => {
     expect(out.filter((e) => e.exId === "squat" || e.exId === "leg_press")).toEqual([expect.objectContaining({ exId: "squat", status: "skipped", reason: "No time" })]);
   });
 
-  it("a draft from before plan marks gets them on load", () => {
+  it("a draft from before plan marks gets them on load, once", () => {
     const raw = { version: 3, plan: { workouts: [{ id: "a", name: "A", exercises: [x] }] }, draft: { workoutId: "a", exercises: [{ exId: "squat", name: "Squat", sets: [] }, { exId: "curl", name: "Curl", sets: [] }] } };
     const m = migrate(raw);
     expect(m.draft.exercises.map((e) => !!e.fromPlan)).toEqual([true, false]);
+    // Later: Squat swapped away, Squat added again by hand. Reloading must not mark the added one.
+    m.draft.exercises = [{ exId: "leg_press", name: "Leg Press", sets: [], swappedFrom: { exId: "squat", name: "Squat" } }, { exId: "squat", name: "Squat", sets: [] }];
+    expect(migrate(JSON.parse(JSON.stringify(m))).draft.exercises.map((e) => !!e.fromPlan)).toEqual([false, false]);
+    expect(startDraft(st, { id: "a", name: "A", exercises: [x] }).planMarked).toBe(true);
+  });
+
+  it("swap reasons alone are worth saving", () => {
+    const d = plan();
+    d.exercises = d.exercises.map((e) => ({ ...newEntry(st, { ...x, id: e.exId + "_alt", name: e.name + " alt" }), swappedFrom: { exId: e.exId, name: e.name, reason: "Equipment busy" } }));
+    expect(sessionHasContent(finalizeDraft(d))).toBe(true);
   });
 
   it("status entries survive a backup, and never count as 'last time'", () => {
