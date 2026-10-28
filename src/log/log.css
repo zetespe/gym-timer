@@ -106,9 +106,9 @@ details summary { cursor: pointer; }
 .menu .ic { width: 20px; text-align: center; } .menu small { display: block; color: var(--muted); font-size: 13px; }
 .menu .red { color: var(--red); }
 .card.skipped { opacity: .55; }
-.restctl { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-.log .restctl button { width: 36px; height: 32px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); font-size: 18px; }
-.restctl b { min-width: 52px; text-align: center; font-weight: 600; }
+.restctl { display: flex; align-items: center; gap: 8px; margin: 14px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.log .restctl button { width: 40px; height: 36px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); font-size: 18px; }
+.restctl b { min-width: 56px; text-align: center; font-weight: 600; }
 .iconbtn { width: 40px; height: 40px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); font-size: 18px; }
 
 .modal-back { position: fixed; inset: 0; z-index: 80; background: #000b; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }

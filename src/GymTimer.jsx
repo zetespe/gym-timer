@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { beep, doubleBeep, tripleBeep, speak } from "./audio";
+import { beep, doubleBeep, tripleBeep, speak, testSound } from "./audio";
 import { useWakeLock, wakeLockSupported } from "./useWakeLock";
 import { getState, patch } from "./log/store";
 
@@ -113,6 +113,7 @@ export default function GymTimer({ preset, onResult } = {}) {
       beep(880, 120, 0.4);
       setTimeout(() => speak("15 seconds. Get ready."), 150);
     }
+    if (phaseRef.current === PHASE_REST && newTime === 5 && restTime >= 10) speak("5 seconds");
 
     if (newTime <= 0) {
       if (phaseRef.current === PHASE_HOLD) {
@@ -169,11 +170,6 @@ export default function GymTimer({ preset, onResult } = {}) {
     if (onResult) onResult({ holds, sets: fullSets, hold: holdTime, perSet: per, partial: partial >= 3 ? partial : 0 });
   }, [cleanup, onResult, holdTime, usesSets, perSet]);
   useEffect(() => { finishRef.current = handleStop; }, [handleStop]);
-
-  const handleTestSound = useCallback(() => {
-    beep(880, 150, 0.5);
-    setTimeout(() => speak("Sound check. Ready to go!"), 200);
-  }, []);
 
   const isRunning = phase !== PHASE_IDLE;
 
@@ -403,7 +399,7 @@ export default function GymTimer({ preset, onResult } = {}) {
             <button onClick={handleStart} style={btnStyle("#FF3B30")}>
               START
             </button>
-            <button onClick={handleTestSound} style={btnStyle("#333", "#999")}>
+            <button onClick={testSound} style={btnStyle("#333", "#999")}>
               TEST SOUND
             </button>
           </>

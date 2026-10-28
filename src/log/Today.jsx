@@ -1,6 +1,7 @@
 import { useLog, setState, today } from "./store";
 import { fmtDate, fmtEntry, sortedSessions, startDraft, summaryText, draftHasProgress } from "./model";
 import { copyText, confirmAction } from "./ui";
+import { testSound } from "../audio";
 
 export default function Today({ go, justFinished }) {
   const S = useLog();
@@ -30,6 +31,7 @@ export default function Today({ go, justFinished }) {
         <button className="big" onClick={() => go("plan", { paste: true })}><strong>Paste a plan</strong><span>From Notion, a coach, or an AI chat. Lines like “Goblet Squat 3x8-10 16kg”.</span></button>
         <button className="big" onClick={() => go("backup")}><strong>Restore a backup</strong><span>Pick a backup file you saved earlier.</span></button>
         <button className="big" onClick={() => start(null)}><strong>Just log a free session</strong><span>No plan needed. Add exercises as you go.</span></button>
+        <div className="row" style={{ marginTop: 14 }}><button className="btn sm" onClick={testSound}>🔊 Test sound</button></div>
       </div>
     );
   }
@@ -53,6 +55,7 @@ export default function Today({ go, justFinished }) {
         return <button className="big" key={w.id} onClick={() => start(w)}><strong>{w.name}</strong><span>{w.subtitle}{w.subtitle && last ? " · " : ""}{last ? "last " + fmtDate(last.date) : ""}{!w.subtitle && !last ? w.exercises.length + " exercises" : ""}</span></button>;
       })}
       <button className="big" onClick={() => start(null)}><strong>Free session</strong><span>Anything off-plan. Add exercises as you go.</span></button>
+      <div className="row" style={{ marginTop: 14 }}><button className="btn sm" onClick={testSound}>🔊 Test sound</button></div>
       {recent.length > 0 && <h2>Recent</h2>}
       {recent.map((s) => (
         <div className="card" key={s.id}>

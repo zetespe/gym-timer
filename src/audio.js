@@ -35,3 +35,9 @@ export function speak(text) {
     window.speechSynthesis.speak(u);
   } catch (e) {}
 }
+
+// "Test sound" button: lets you check volume and the voice before a workout.
+export function testSound() {
+  beep(880, 150, 0.5);
+  setTimeout(() => speak("Sound check. Ready to go!"), 200);
+}

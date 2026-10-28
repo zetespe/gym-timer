@@ -43,6 +43,7 @@ export default function Session({ onFinished, onExit }) {
       if (left <= 4 && left > 1 && restPrev.current === left + 1) beep(660, 80, 0.3);
       // Long rests get a spoken warning so you can get into position.
       if (left === 15 && rest.total >= 25 && restPrev.current === 16) { beep(880, 120, 0.4); setTimeout(() => speak("15 seconds. Get ready."), 150); }
+      if (left === 5 && rest.total > 5 && restPrev.current === 6) speak("5 seconds");
       if (left > 0) restPrev.current = left; // 0 is recorded by the finish branch, after it announces "Go"
       setRest((r) => (r ? { ...r, left } : r));
     };
