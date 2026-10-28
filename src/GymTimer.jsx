@@ -113,7 +113,7 @@ export default function GymTimer({ preset, onResult } = {}) {
       beep(880, 120, 0.4);
       setTimeout(() => speak("15 seconds. Get ready."), 150);
     }
-    if (phaseRef.current === PHASE_REST && newTime === 5 && restTime > 5) speak("5 seconds");
+    if (phaseRef.current === PHASE_REST && newTime === 5 && restTime >= 10) speak("5 seconds");
 
     if (newTime <= 0) {
       if (phaseRef.current === PHASE_HOLD) {
